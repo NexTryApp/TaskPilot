@@ -246,44 +246,68 @@ function renderInlinePermissions(channel) {
   el.innerHTML = html;
 }
 
-// ===== Channel Toggle =====
-function applyChannelState(card, ch, checkbox, body) {
-  if (checkbox.checked) {
-    card.classList.add('enabled');
-    body.classList.add('open');
-    renderConnectionInfo(ch);
-    renderInlinePermissions(ch);
-  } else {
-    card.classList.remove('enabled');
-    body.classList.remove('open');
-  }
+// ===== Channel Toggle (only one channel at a time) =====
+const allChannelCards = document.querySelectorAll('.channel-card');
+
+function selectChannel(activeCard) {
+  // Deselect all other channels
+  allChannelCards.forEach(card => {
+    const cb = card.querySelector(':scope > .channel-header > input[type="checkbox"]');
+    const body = card.querySelector(':scope > .channel-body');
+    if (!cb || !body) return;
+
+    if (card === activeCard) {
+      cb.checked = true;
+      card.classList.add('enabled');
+      body.classList.add('open');
+      renderConnectionInfo(card.dataset.channel);
+      renderInlinePermissions(card.dataset.channel);
+    } else {
+      cb.checked = false;
+      card.classList.remove('enabled');
+      body.classList.remove('open');
+    }
+  });
 }
 
-document.querySelectorAll('.channel-card').forEach(card => {
-  const ch = card.dataset.channel;
-  const checkbox = card.querySelector(':scope > .channel-header > input[type="checkbox"]');
-  const body = card.querySelector(':scope > .channel-body');
-  const header = card.querySelector(':scope > .channel-header');
-  if (!checkbox || !body || !header) return;
+function deselectAllChannels() {
+  allChannelCards.forEach(card => {
+    const cb = card.querySelector(':scope > .channel-header > input[type="checkbox"]');
+    const body = card.querySelector(':scope > .channel-body');
+    if (!cb || !body) return;
+    cb.checked = false;
+    card.classList.remove('enabled');
+    body.classList.remove('open');
+  });
+}
 
-  // Prevent checkbox click from bubbling to header (avoids double-toggle)
+allChannelCards.forEach(card => {
+  const checkbox = card.querySelector(':scope > .channel-header > input[type="checkbox"]');
+  const header = card.querySelector(':scope > .channel-header');
+  if (!checkbox || !header) return;
+
+  // Prevent checkbox click from bubbling to header
   checkbox.addEventListener('click', (e) => {
     e.stopPropagation();
   });
 
-  // Header click toggles the checkbox (except when clicking inside body area)
+  // Header click — select this channel (or deselect if already selected)
   header.addEventListener('click', () => {
-    checkbox.checked = !checkbox.checked;
-    applyChannelState(card, ch, checkbox, body);
+    if (checkbox.checked) {
+      deselectAllChannels();
+    } else {
+      selectChannel(card);
+    }
   });
 
-  // Also handle programmatic / direct checkbox changes
+  // Direct checkbox change (click on checkbox itself)
   checkbox.addEventListener('change', () => {
-    applyChannelState(card, ch, checkbox, body);
+    if (checkbox.checked) {
+      selectChannel(card);
+    } else {
+      deselectAllChannels();
+    }
   });
-
-  // Initialize — apply state for pre-checked channels (browser, terminal)
-  applyChannelState(card, ch, checkbox, body);
 });
 
 // ===== Page 1 -> Page 2 =====
@@ -354,7 +378,7 @@ function buildAccessPolicies() {
 function getEnabledChannels() {
   const channels = [];
   document.querySelectorAll('.channel-card').forEach(card => {
-    const cb = card.querySelector('input[type="checkbox"]');
+    const cb = card.querySelector(':scope > .channel-header > input[type="checkbox"]');
     if (cb && cb.checked) channels.push(card.dataset.channel);
   });
   return channels;
