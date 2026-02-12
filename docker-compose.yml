@@ -1,0 +1,38 @@
+# TaskPilot — Docker Compose (full stack)
+# Usage: docker compose up --build
+# Web UI: http://localhost:4242
+# Agent commands run in an isolated sandbox container.
+
+services:
+  taskpilot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4242:4242"
+    environment:
+      - NODE_ENV=production
+      - SANDBOX_URL=http://sandbox:3001
+    volumes:
+      - taskpilot-data:/app/data
+    depends_on:
+      sandbox:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    volumes:
+      - taskpilot-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  taskpilot-data:

@@ -8,7 +8,7 @@ Framework for autonomous AI agents with built-in agent loop, tools, memory, acce
 
 ### Option 1: Web UI (recommended)
 
-Double-click **`start.bat`** in the project root — the browser interface opens at `http://localhost:3000`.
+Double-click **`start.bat`** in the project root — the browser interface opens at `http://localhost:4242`.
 
 Or from the command line:
 
@@ -17,7 +17,7 @@ Or from the command line:
 npx tsx web/server.ts
 ```
 
-Then open **http://localhost:3000** in your browser.
+Then open **http://localhost:4242** in your browser.
 
 **How to use:**
 
@@ -41,7 +41,26 @@ $env:OPENAI_API_KEY = "sk-..."
 npx tsx example/run-agent.ts
 ```
 
-### First-time installation
+### Option 3: Docker (recommended for isolation)
+
+```bash
+docker compose up --build
+```
+
+Open **http://localhost:4242** — the web UI is identical, but agent terminal commands run inside an **isolated sandbox container** (not on your host machine).
+
+**What's inside:**
+- `taskpilot` container — web UI + agent loop (port 4242)
+- `sandbox` container — isolated shell for agent commands (internal, not exposed)
+- `taskpilot-data` volume — persistent storage for sessions and memory
+
+To stop: `Ctrl+C` or `docker compose down`. Data persists in the Docker volume.
+
+On Windows, you can also double-click **`start-docker.bat`**.
+
+---
+
+### First-time installation (without Docker)
 
 ```powershell
 py -m venv venv
@@ -68,15 +87,22 @@ Full step-by-step guide: **[docs/QUICKSTART.md](./docs/QUICKSTART.md)**
 
 | Provider | Models | baseUrl |
 |----------|--------|---------|
-| **OpenAI** | `gpt-4o`, `gpt-4o-mini`, `o3-mini` | `https://api.openai.com/v1` (default) |
-| **Anthropic** | `claude-sonnet-4`, `claude-3.5-haiku` | `https://api.anthropic.com/v1` |
-| **Google Gemini** | `gemini-2.0-flash`, `gemini-2.5-pro` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| **OpenAI** | `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `o3-mini`, `o4-mini` | `https://api.openai.com/v1` |
+| **Anthropic** | `claude-opus-4`, `claude-sonnet-4`, `claude-3.5-haiku` | `https://api.anthropic.com/v1` |
+| **Google Gemini** | `gemini-2.5-pro`, `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` |
 | **DeepSeek** | `deepseek-chat`, `deepseek-reasoner` | `https://api.deepseek.com/v1` |
+| **xAI** | `grok-3`, `grok-3-mini`, `grok-2` | `https://api.x.ai/v1` |
+| **Moonshot (Kimi)** | `kimi-k2`, `moonshot-v1-128k` | `https://api.moonshot.cn/v1` |
 | **Groq** | `llama-3.3-70b`, `mixtral-8x7b` | `https://api.groq.com/openai/v1` |
+| **Mistral** | `mistral-large`, `mistral-small`, `codestral` | `https://api.mistral.ai/v1` |
 | **Together** | `Llama-3.3-70B`, `Qwen2.5-72B` | `https://api.together.xyz/v1` |
-| **Mistral** | `mistral-large`, `mistral-small` | `https://api.mistral.ai/v1` |
-| **OpenRouter** | 200+ models | `https://openrouter.ai/api/v1` |
-| **Ollama (local)** | `llama3`, `mistral`, `qwen2.5` | `http://localhost:11434/v1` |
+| **MiniMax** | `MiniMax-M2.1`, `MiniMax-Text-01` | `https://api.minimax.chat/v1` |
+| **Venice AI** | `llama-3.3-70b`, `claude-opus-45` | `https://api.venice.ai/api/v1` |
+| **Qwen (Alibaba)** | `qwen-plus`, `qwen-turbo`, `qwen-max` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| **GLM (Zhipu)** | `glm-4-plus`, `glm-4-flash` | `https://open.bigmodel.cn/api/paas/v4` |
+| **Amazon Bedrock** | `claude-sonnet-4`, `llama3-70b` | `https://bedrock-runtime.*.amazonaws.com` |
+| **OpenRouter** | 200+ models from all providers | `https://openrouter.ai/api/v1` |
+| **Ollama (local)** | `llama3`, `mistral`, `qwen2.5`, `deepseek-r1` | `http://localhost:11434/v1` |
 
 Any provider with an OpenAI-compatible API works out of the box.
 

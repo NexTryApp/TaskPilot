@@ -230,7 +230,7 @@ TaskPilot includes a built-in web interface for running agents through the brows
 Just double-click `start.bat` in the project root. It activates the venv and starts the server. The browser opens at:
 
 ```
-http://localhost:3000
+http://localhost:4242
 ```
 
 ### Option B: Command line
@@ -240,7 +240,7 @@ http://localhost:3000
 npx tsx web/server.ts
 ```
 
-Then open `http://localhost:3000` in your browser.
+Then open `http://localhost:4242` in your browser.
 
 ### How to use the Web UI
 

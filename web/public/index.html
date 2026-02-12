@@ -7,113 +7,358 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="layout">
-    <!-- Left: Config Panel -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <h1>TaskPilot</h1>
-      </div>
+  <!-- ===== Stepper ===== -->
+  <nav class="stepper">
+    <div class="stepper-brand">TaskPilot</div>
+    <div class="stepper-steps">
+      <div class="step active" data-step="1"><span class="step-num">1</span> Setup</div>
+      <div class="step" data-step="2"><span class="step-num">2</span> Agent</div>
+      <div class="step" data-step="3"><span class="step-num">3</span> Dashboard</div>
+    </div>
+  </nav>
 
-      <div class="sidebar-scroll">
-        <!-- Provider -->
-        <section class="panel">
-          <h2>Provider</h2>
-          <div class="provider-grid">
-            <button class="provider-btn selected" data-provider="openai" data-url="https://api.openai.com/v1">OpenAI</button>
-            <button class="provider-btn" data-provider="deepseek" data-url="https://api.deepseek.com/v1">DeepSeek</button>
-            <button class="provider-btn" data-provider="groq" data-url="https://api.groq.com/openai/v1">Groq</button>
-            <button class="provider-btn" data-provider="gemini" data-url="https://generativelanguage.googleapis.com/v1beta/openai">Gemini</button>
-            <button class="provider-btn" data-provider="anthropic" data-url="https://api.anthropic.com/v1">Anthropic</button>
-            <button class="provider-btn" data-provider="mistral" data-url="https://api.mistral.ai/v1">Mistral</button>
-            <button class="provider-btn" data-provider="together" data-url="https://api.together.xyz/v1">Together</button>
-            <button class="provider-btn" data-provider="openrouter" data-url="https://openrouter.ai/api/v1">OpenRouter</button>
-            <button class="provider-btn" data-provider="ollama" data-url="http://localhost:11434/v1">Ollama</button>
-          </div>
-        </section>
+  <!-- ===== PAGE 1: Setup (Provider + Channels) ===== -->
+  <section class="page active" id="page1">
+    <div class="page-content">
+      <h2 class="page-title">Connections</h2>
+      <p class="page-desc">Choose an LLM provider and connect the platforms your agent will use.</p>
 
-        <!-- Settings -->
-        <section class="panel">
-          <h2>Settings</h2>
+      <!-- LLM Provider -->
+      <div class="section-card">
+        <h3>LLM Provider</h3>
+        <div class="provider-grid">
+          <button class="provider-btn selected" data-provider="openai" data-url="https://api.openai.com/v1">OpenAI</button>
+          <button class="provider-btn" data-provider="anthropic" data-url="https://api.anthropic.com/v1">Anthropic</button>
+          <button class="provider-btn" data-provider="gemini" data-url="https://generativelanguage.googleapis.com/v1beta/openai">Gemini</button>
+          <button class="provider-btn" data-provider="deepseek" data-url="https://api.deepseek.com/v1">DeepSeek</button>
+          <button class="provider-btn" data-provider="xai" data-url="https://api.x.ai/v1">xAI (Grok)</button>
+          <button class="provider-btn" data-provider="moonshot" data-url="https://api.moonshot.cn/v1">Kimi</button>
+          <button class="provider-btn" data-provider="groq" data-url="https://api.groq.com/openai/v1">Groq</button>
+          <button class="provider-btn" data-provider="mistral" data-url="https://api.mistral.ai/v1">Mistral</button>
+          <button class="provider-btn" data-provider="together" data-url="https://api.together.xyz/v1">Together</button>
+          <button class="provider-btn" data-provider="minimax" data-url="https://api.minimax.chat/v1">MiniMax</button>
+          <button class="provider-btn" data-provider="venice" data-url="https://api.venice.ai/api/v1">Venice AI</button>
+          <button class="provider-btn" data-provider="qwen" data-url="https://dashscope.aliyuncs.com/compatible-mode/v1">Qwen</button>
+          <button class="provider-btn" data-provider="glm" data-url="https://open.bigmodel.cn/api/paas/v4">GLM (Zhipu)</button>
+          <button class="provider-btn" data-provider="bedrock" data-url="https://bedrock-runtime.us-east-1.amazonaws.com">Bedrock</button>
+          <button class="provider-btn" data-provider="openrouter" data-url="https://openrouter.ai/api/v1">OpenRouter</button>
+          <button class="provider-btn" data-provider="ollama" data-url="http://localhost:11434/v1">Ollama</button>
+        </div>
+        <div class="form-row" style="margin-top:14px">
           <div class="form-group">
             <label for="apiKey">API Key</label>
             <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+            <span class="hint" id="keyHint">Get key at <a href="https://platform.openai.com/api-keys" target="_blank" id="keyLink">platform.openai.com</a></span>
           </div>
           <div class="form-group">
             <label for="model">Model</label>
-            <input type="text" id="model" value="gpt-4o-mini">
+            <select id="model"></select>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="maxSteps">Max steps</label>
-              <input type="number" id="maxSteps" value="10" min="1" max="50">
-            </div>
-            <div class="form-group">
-              <label for="maxTokens">Token limit</label>
-              <input type="number" id="maxTokens" value="0" min="0">
-            </div>
-          </div>
-        </section>
-
-        <!-- Tools -->
-        <section class="panel">
-          <h2>Tools</h2>
-          <div class="tools-list" id="toolsList">
-            <label class="tool-toggle">
-              <input type="checkbox" data-tool="telegram_send" checked>
-              <span class="tool-info"><strong>telegram_send</strong><span class="tool-ctx">Telegram</span></span>
-            </label>
-            <label class="tool-toggle">
-              <input type="checkbox" data-tool="telegram_read" checked>
-              <span class="tool-info"><strong>telegram_read</strong><span class="tool-ctx">Telegram</span></span>
-            </label>
-            <label class="tool-toggle">
-              <input type="checkbox" data-tool="browser_open" checked>
-              <span class="tool-info"><strong>browser_open</strong><span class="tool-ctx">Chrome</span></span>
-            </label>
-            <label class="tool-toggle">
-              <input type="checkbox" data-tool="browser_search" checked>
-              <span class="tool-info"><strong>browser_search</strong><span class="tool-ctx">Chrome</span></span>
-            </label>
-            <label class="tool-toggle">
-              <input type="checkbox" data-tool="terminal_run" checked>
-              <span class="tool-info"><strong>terminal_run</strong><span class="tool-ctx">Terminal</span></span>
-            </label>
-            <label class="tool-toggle">
-              <input type="checkbox" data-tool="create_task" checked>
-              <span class="tool-info"><strong>create_task</strong><span class="tool-ctx">Task Manager</span></span>
-            </label>
-            <label class="tool-toggle">
-              <input type="checkbox" data-tool="get_weather">
-              <span class="tool-info"><strong>get_weather</strong><span class="tool-ctx">Weather API</span></span>
-            </label>
-            <label class="tool-toggle">
-              <input type="checkbox" data-tool="send_email">
-              <span class="tool-info"><strong>send_email</strong><span class="tool-ctx">Email</span></span>
-            </label>
-          </div>
-        </section>
-
-        <!-- Goal -->
-        <section class="panel">
-          <h2>Goal</h2>
-          <textarea id="goal" rows="3" placeholder="e.g.: Read Telegram messages, search the web for weather, and create a task"></textarea>
-          <button class="btn-start" id="btnStart">Start agent</button>
-        </section>
+        </div>
       </div>
-    </aside>
 
-    <!-- Right: Dashboard -->
-    <main class="dashboard">
+      <!-- Channels -->
+      <div class="section-card">
+        <h3>Channels</h3>
+        <p class="section-desc">The agent will be active on <strong>all enabled channels simultaneously</strong>. Enable platforms, enter credentials, and configure permissions below.</p>
+
+        <!-- Telegram -->
+        <div class="channel-card" data-channel="telegram">
+          <div class="channel-header">
+            <input type="checkbox" id="ch-telegram">
+            <span class="ch-icon">&#x1F4AC;</span>
+            <div class="ch-meta">
+              <strong>Telegram</strong>
+              <span class="ch-status" id="ch-telegram-status">Not connected</span>
+            </div>
+          </div>
+          <div class="channel-body" id="ch-telegram-body">
+            <div class="ch-credentials">
+              <div class="form-group">
+                <label>Bot Token <span class="req">*</span></label>
+                <input type="password" id="tg-token" placeholder="123456:ABC-DEF..." autocomplete="off">
+                <span class="hint">Chat with <a href="https://t.me/BotFather" target="_blank">@BotFather</a> &rarr; /newbot &rarr; copy token</span>
+              </div>
+              <div class="form-group">
+                <label>Bot Username</label>
+                <input type="text" id="tg-username" placeholder="@my_agent_bot">
+              </div>
+              <div class="form-group">
+                <label>Allowed Chats <span class="opt">(optional)</span></label>
+                <input type="text" id="tg-allow" placeholder="chat_id or @username, comma-separated">
+                <span class="hint">Empty = respond to all DMs</span>
+              </div>
+            </div>
+            <div class="ch-connection" id="ch-telegram-conn"></div>
+            <div class="ch-permissions" id="ch-telegram-perms"></div>
+          </div>
+        </div>
+
+        <!-- Discord -->
+        <div class="channel-card" data-channel="discord">
+          <div class="channel-header">
+            <input type="checkbox" id="ch-discord">
+            <span class="ch-icon">&#x1F3AE;</span>
+            <div class="ch-meta">
+              <strong>Discord</strong>
+              <span class="ch-status" id="ch-discord-status">Not connected</span>
+            </div>
+          </div>
+          <div class="channel-body" id="ch-discord-body">
+            <div class="ch-credentials">
+              <div class="form-group">
+                <label>Bot Token <span class="req">*</span></label>
+                <input type="password" id="dc-token" placeholder="MTIz..." autocomplete="off">
+                <span class="hint">From <a href="https://discord.com/developers/applications" target="_blank">Developer Portal</a> &rarr; Bot &rarr; Token</span>
+              </div>
+              <div class="form-group">
+                <label>Server ID <span class="opt">(optional)</span></label>
+                <input type="text" id="dc-server" placeholder="123456789012345678">
+              </div>
+            </div>
+            <div class="ch-connection" id="ch-discord-conn"></div>
+            <div class="ch-permissions" id="ch-discord-perms"></div>
+          </div>
+        </div>
+
+        <!-- WhatsApp -->
+        <div class="channel-card" data-channel="whatsapp">
+          <div class="channel-header">
+            <input type="checkbox" id="ch-whatsapp">
+            <span class="ch-icon">&#x1F4F1;</span>
+            <div class="ch-meta">
+              <strong>WhatsApp</strong>
+              <span class="ch-status" id="ch-whatsapp-status">Not connected</span>
+            </div>
+          </div>
+          <div class="channel-body" id="ch-whatsapp-body">
+            <div class="ch-credentials">
+              <div class="form-group">
+                <label>Phone Number ID <span class="req">*</span></label>
+                <input type="text" id="wa-phone" placeholder="15550123456">
+                <span class="hint">From <a href="https://developers.facebook.com/" target="_blank">Meta Business Suite</a></span>
+              </div>
+              <div class="form-group">
+                <label>Access Token <span class="req">*</span></label>
+                <input type="password" id="wa-token" placeholder="EAAGm..." autocomplete="off">
+              </div>
+            </div>
+            <div class="ch-connection" id="ch-whatsapp-conn"></div>
+            <div class="ch-permissions" id="ch-whatsapp-perms"></div>
+          </div>
+        </div>
+
+        <!-- Slack -->
+        <div class="channel-card" data-channel="slack">
+          <div class="channel-header">
+            <input type="checkbox" id="ch-slack">
+            <span class="ch-icon">&#x1F4BC;</span>
+            <div class="ch-meta">
+              <strong>Slack</strong>
+              <span class="ch-status" id="ch-slack-status">Not connected</span>
+            </div>
+          </div>
+          <div class="channel-body" id="ch-slack-body">
+            <div class="ch-credentials">
+              <div class="form-group">
+                <label>Bot Token <span class="req">*</span></label>
+                <input type="password" id="sl-token" placeholder="xoxb-..." autocomplete="off">
+                <span class="hint">From <a href="https://api.slack.com/apps" target="_blank">Slack Apps</a> &rarr; OAuth &amp; Permissions</span>
+              </div>
+              <div class="form-group">
+                <label>Signing Secret <span class="opt">(optional)</span></label>
+                <input type="password" id="sl-secret" placeholder="abc123..." autocomplete="off">
+              </div>
+            </div>
+            <div class="ch-connection" id="ch-slack-conn"></div>
+            <div class="ch-permissions" id="ch-slack-perms"></div>
+          </div>
+        </div>
+
+        <!-- Browser -->
+        <div class="channel-card" data-channel="browser">
+          <div class="channel-header">
+            <input type="checkbox" id="ch-browser" checked>
+            <span class="ch-icon">&#x1F310;</span>
+            <div class="ch-meta">
+              <strong>Web Browser</strong>
+              <span class="ch-status connected" id="ch-browser-status">Ready</span>
+            </div>
+          </div>
+          <div class="channel-body" id="ch-browser-body">
+            <div class="ch-credentials">
+              <div class="form-group">
+                <label>Browser Mode</label>
+                <select id="br-mode">
+                  <option value="headless">Headless (background)</option>
+                  <option value="visible">Visible (show window)</option>
+                </select>
+              </div>
+              <span class="hint">No credentials needed. Uses built-in browser automation.</span>
+            </div>
+            <div class="ch-connection" id="ch-browser-conn"></div>
+            <div class="ch-permissions" id="ch-browser-perms"></div>
+          </div>
+        </div>
+
+        <!-- Terminal -->
+        <div class="channel-card" data-channel="terminal">
+          <div class="channel-header">
+            <input type="checkbox" id="ch-terminal" checked>
+            <span class="ch-icon">&#x1F4BB;</span>
+            <div class="ch-meta">
+              <strong>Terminal</strong>
+              <span class="ch-status connected" id="ch-terminal-status">Ready</span>
+            </div>
+          </div>
+          <div class="channel-body" id="ch-terminal-body">
+            <div class="ch-credentials">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Working Directory <span class="opt">(optional)</span></label>
+                  <input type="text" id="tm-cwd" placeholder="C:\Projects\my-app">
+                </div>
+                <div class="form-group">
+                  <label>Shell</label>
+                  <select id="tm-shell">
+                    <option value="powershell">PowerShell</option>
+                    <option value="cmd">cmd.exe</option>
+                    <option value="bash">Bash / WSL</option>
+                  </select>
+                </div>
+              </div>
+              <span class="hint">No credentials needed. Runs commands locally.</span>
+            </div>
+            <div class="ch-connection" id="ch-terminal-conn"></div>
+            <div class="ch-permissions" id="ch-terminal-perms"></div>
+          </div>
+        </div>
+
+        <!-- Email -->
+        <div class="channel-card" data-channel="email">
+          <div class="channel-header">
+            <input type="checkbox" id="ch-email">
+            <span class="ch-icon">&#x2709;&#xFE0F;</span>
+            <div class="ch-meta">
+              <strong>Email (SMTP)</strong>
+              <span class="ch-status" id="ch-email-status">Not connected</span>
+            </div>
+          </div>
+          <div class="channel-body" id="ch-email-body">
+            <div class="ch-credentials">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>SMTP Host <span class="req">*</span></label>
+                  <input type="text" id="em-host" placeholder="smtp.gmail.com">
+                </div>
+                <div class="form-group">
+                  <label>Port</label>
+                  <input type="number" id="em-port" value="587">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="em-user" placeholder="bot@example.com">
+              </div>
+              <div class="form-group">
+                <label>Password / App Password <span class="req">*</span></label>
+                <input type="password" id="em-pass" placeholder="..." autocomplete="off">
+              </div>
+            </div>
+            <div class="ch-connection" id="ch-email-conn"></div>
+            <div class="ch-permissions" id="ch-email-perms"></div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btnNext1">Next: Configure Agent &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ===== PAGE 2: Agent Config ===== -->
+  <section class="page" id="page2">
+    <div class="page-content">
+      <h2 class="page-title">Agent Configuration</h2>
+      <p class="page-desc">Set the agent identity, system prompt, permissions, and goal.</p>
+
+      <!-- Identity -->
+      <div class="section-card">
+        <h3>Identity</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="agentName">Agent Name</label>
+            <input type="text" id="agentName" value="TaskPilot" placeholder="My Agent">
+          </div>
+          <div class="form-group">
+            <label for="agentDesc">Description</label>
+            <input type="text" id="agentDesc" value="Autonomous AI assistant" placeholder="What this agent does">
+          </div>
+        </div>
+      </div>
+
+      <!-- System Prompt -->
+      <div class="section-card">
+        <h3>System Prompt</h3>
+        <p class="section-desc">Instructions that define how the agent behaves. Like OpenClaw's AGENTS.md + SOUL.md.</p>
+        <textarea id="systemPrompt" rows="8" placeholder="You are a helpful autonomous agent...">You are a helpful autonomous agent. Use the available tools to achieve the user's goal step by step. Be concise and precise.
+
+When using Telegram, be conversational and friendly.
+When browsing the web, summarize key information.
+When running terminal commands, explain what each command does.
+Always confirm before taking destructive actions.</textarea>
+      </div>
+
+      <!-- Access Policy Summary (configured on Page 1) -->
+      <div class="section-card">
+        <h3>Access Policy Summary</h3>
+        <p class="section-desc">Permissions are configured per channel on the Setup page. Below is a read-only summary.</p>
+        <div id="accessPolicies"></div>
+      </div>
+
+      <!-- Limits -->
+      <div class="section-card">
+        <h3>Execution Limits</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="maxSteps">Max Steps</label>
+            <input type="number" id="maxSteps" value="15" min="1" max="100">
+            <span class="hint">How many tool calls the agent can make</span>
+          </div>
+          <div class="form-group">
+            <label for="maxTokens">Token Limit</label>
+            <input type="number" id="maxTokens" value="0" min="0">
+            <span class="hint">0 = unlimited</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Goal -->
+      <div class="section-card">
+        <h3>Goal</h3>
+        <textarea id="goal" rows="3" placeholder="e.g.: Read latest Telegram messages, search the web for weather in London, and reply with a summary"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-secondary" id="btnBack2">&larr; Back</button>
+        <button class="btn-primary" id="btnStart">Start Agent &rarr;</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PAGE 3: Live Dashboard ===== -->
+  <section class="page" id="page3">
+    <div class="page-content page-content-wide">
       <!-- Top bar -->
       <div class="dash-topbar">
         <div class="status-indicator" id="statusIndicator">
           <span class="status-dot idle"></span>
           <span id="statusLabel">Idle</span>
         </div>
-        <div class="step-counter" id="stepCounter">Step 0 / 10</div>
+        <div class="step-counter" id="stepCounter">Step 0 / 15</div>
+        <button class="btn-small" id="btnBack3">&larr; Back to config</button>
       </div>
 
-      <!-- Active Workspace -->
+      <!-- Agent Workspace -->
       <section class="dash-card workspace-card">
         <h3>Agent Workspace</h3>
         <div class="workspace-channels" id="workspaceChannels">
@@ -122,8 +367,8 @@
       </section>
 
       <!-- Permissions -->
-      <section class="dash-card permissions-card collapsed" id="permissionsCard">
-        <h3 class="collapsible" id="permToggle">Agent Permissions <span class="collapse-arrow">&#9656;</span></h3>
+      <section class="dash-card permissions-card">
+        <h3 class="collapsible" id="permToggle">Permissions <span class="collapse-arrow">&#9656;</span></h3>
         <div class="perm-grid" id="permGrid" style="display:none"></div>
       </section>
 
@@ -135,7 +380,6 @@
             <div class="feed-placeholder">Events will appear here in real time</div>
           </div>
         </section>
-
         <section class="dash-card thoughts-card">
           <h3>Agent Thinking</h3>
           <div class="thoughts-feed" id="thoughtsFeed">
@@ -155,8 +399,8 @@
         <h3>Run Summary</h3>
         <div id="summaryContent"></div>
       </section>
-    </main>
-  </div>
+    </div>
+  </section>
 
   <script src="app.js"></script>
 </body>
