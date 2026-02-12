@@ -1,49 +1,49 @@
-# Безопасность данных и контроль доступа (TaskPilot)
+# Data Security and Access Control (TaskPilot)
 
-Фреймворк даёт **полный контроль доступа** на уровне ранна и инструментов: кто что может вызывать и какие данные видит.
+The framework provides **full access control** at the run and tool level: who can call what and what data they see.
 
 ---
 
-## 1. Модель доступа
+## 1. Access Model
 
-### Principal (субъект)
+### Principal (subject)
 
-Кто выполняет запуск агента. Задаётся при вызове `runAgentLoop` через `goal.accessContext.principal`.
+Who runs the agent. Set when calling `runAgentLoop` via `goal.accessContext.principal`.
 
 ```ts
 interface Principal {
-  id: string;           // идентификатор (userId, apiKeyId и т.д.)
-  tenantId?: string;   // тенант для мультитенантности
-  roles?: string[];    // роли (admin, user, …)
-  scopes?: string[];   // скоупы (tasks:read, tasks:write, …)
+  id: string;           // identifier (userId, apiKeyId, etc.)
+  tenantId?: string;   // tenant for multi-tenancy
+  roles?: string[];    // roles (admin, user, …)
+  scopes?: string[];   // scopes (tasks:read, tasks:write, …)
   metadata?: Record<string, unknown>;
 }
 ```
 
-- **id** — обязателен; по нему изолируется долгосрочная память (ScopedLongTermMemory).
-- **tenantId, roles, scopes** — для политик и guard’ов (разрешённые инструменты, проверка аргументов).
+- **id** — required; used to isolate long-term memory (ScopedLongTermMemory).
+- **tenantId, roles, scopes** — for policies and guards (allowed tools, argument checks).
 
-### AccessContext (контекст ранна)
+### AccessContext (run context)
 
-На время одного ранна фиксируется: `{ principal, runId }`. Контекст передаётся в проверки доступа и в каждый вызов инструмента, чтобы инструмент мог учитывать, кто вызвал.
+For the duration of one run: `{ principal, runId }`. The context is passed to access checks and to each tool call, so the tool can know who invoked it.
 
 ---
 
-## 2. Контроль доступа к инструментам
+## 2. Tool Access Control
 
-### AccessPolicy на ToolRegistry
+### AccessPolicy on ToolRegistry
 
-Политика задаётся через `tools.setAccessPolicy(policy)`.
+Policy is set via `tools.setAccessPolicy(policy)`.
 
-| Поле | Назначение |
-|------|------------|
-| **allowedTools** | Список разрешённых имён инструментов. `['*']` — все. Пустой массив без `*` — ничего не разрешено. |
-| **deniedTools** | Явный запрет по имени (имеет приоритет над allowedTools). |
-| **guard** | Функция `(context, toolName, args) => boolean | Promise<boolean>`. Вызывается перед каждым выполнением; `false` — доступ запрещён (AccessDeniedError). |
+| Field | Purpose |
+|-------|---------|
+| **allowedTools** | List of allowed tool names. `['*']` — all. Empty array without `*` — nothing allowed. |
+| **deniedTools** | Explicit restriction by name (takes precedence over allowedTools). |
+| **guard** | Function `(context, toolName, args) => boolean | Promise<boolean>`. Called before each execution; `false` — access denied (AccessDeniedError). |
 
-Порядок проверок: `deniedTools` → `allowedTools` → `guard`. Если политика не задана, ограничений по инструментам нет (как раньше).
+Check order: `deniedTools` → `allowedTools` → `guard`. If no policy is set, there are no tool restrictions (as before).
 
-### Пример
+### Example
 
 ```ts
 const tools = new ToolRegistry();
@@ -67,63 +67,63 @@ const state = await runAgentLoop(
 
 ---
 
-## 3. Изоляция данных (память)
+## 3. Data Isolation (memory)
 
-### Краткосрочная память (BufferMemory)
+### Short-term memory (BufferMemory)
 
-Один экземпляр — один ран. Данные не пересекаются между раннами, если для каждого ранна создаётся свой буфер (рекомендуется).
+One instance — one run. Data does not overlap between runs if each run gets its own buffer (recommended).
 
-### Долгосрочная память с изоляцией (ScopedLongTermMemory)
+### Long-term memory with isolation (ScopedLongTermMemory)
 
-`ScopedLongTermMemoryImpl` хранит записи по **scope**. Перед поиском/добавлением вызывается `setScope(scope)`. В агенте scope выставляется в `principal.id` (или, при необходимости, в `tenantId`), так что один пользователь не видит данные другого.
+`ScopedLongTermMemoryImpl` stores entries by **scope**. Before search/add, call `setScope(scope)`. In the agent, scope is set to `principal.id` (or, if needed, `tenantId`), so one user does not see another's data.
 
 ```ts
 const longTerm = new ScopedLongTermMemoryImpl();
-// В agent-loop при наличии accessContext вызывается setScope(principal.id)
+// In agent-loop, when accessContext exists, setScope(principal.id) is called
 await runAgentLoop(
   { goal: '...', accessContext: { principal: { id: 'user_123' }, runId: 'r1' } },
   memory, tools, llm, longTerm, {}
 );
 ```
 
-Если долгосрочная память без scope (например, `SimpleLongTermMemory`) — изоляция по пользователям не выполняется; используй её только для общих/неперсональных данных или задавай scope сам в своей обёртке.
+If long-term memory has no scope (e.g. `SimpleLongTermMemory`) — user isolation is not enforced; use it only for shared/non-personal data or set scope yourself in your wrapper.
 
 ---
 
-## 4. Передача контекста в инструменты
+## 4. Passing Context to Tools
 
-Сигнатура инструмента: `execute(args, context?: AccessContext)`. Внутри инструмента можно:
+Tool signature: `execute(args, context?: AccessContext)`. Inside the tool you can:
 
-- проверять `context.principal.id` / `tenantId` перед обращением к API или БД;
-- подставлять `principal.id` в запросы (например, «создать задачу от имени user_123»);
-- не возвращать чужие данные, если API/БД отдают их по principal.
+- check `context.principal.id` / `tenantId` before calling API or DB;
+- substitute `principal.id` in requests (e.g. "create task on behalf of user_123");
+- not return other users' data if your API/DB returns it by principal.
 
-Фреймворк не подставляет principal в внешние API — это делает реализация инструмента.
-
----
-
-## 5. Что остаётся на стороне платформы
-
-- **Аутентификация** — кто такой principal (JWT, API key, сессия), и откуда берётся `Principal` перед вызовом `runAgentLoop`.
-- **Секреты** — не логировать ключи и токены; не передавать их в цель или в сообщения без необходимости.
-- **Оплаты, лимиты, фрод** — вне фреймворка; можно использовать `principal` и `runId` в своей логике биллинга и лимитов.
-- **Аудит** — при необходимости логировать `principalId`, `runId`, имена вызванных инструментов (без чувствительных args) у себя.
+The framework does not substitute principal in external APIs — the tool implementation does that.
 
 ---
 
-## 6. Рекомендации
+## 5. What Stays on the Platform Side
 
-1. Всегда задавать **accessContext** для пользовательских раннов и использовать **ScopedLongTermMemory** для персональной памяти.
-2. Для каждого ранна создавать **новый BufferMemory** (не переиспользовать между пользователями).
-3. Задавать **AccessPolicy** на общий ToolRegistry (или на регистри по ролям) и при необходимости использовать **guard** для проверки args (например, что пользователь не передаёт чужие id).
-4. В инструментах, которые ходят в твой backend, передавать **principal.id** (и при необходимости tenantId) в заголовках или теле запроса и проверять права на бэкенде.
-5. Не включать секреты и PII в **goal** и **systemPrompt**, если они логируются; при необходимости маскировать в своей обёртке.
-6. **Непроверенный контент** (страницы, письма, чужие сообщения) передавать **только в user message**, никогда — в system или как инструкцию; использовать Tools firewall (AccessPolicy) и по возможности отдельный блок в промпте («Внешний контент: …»).
-
-После этого фреймворк даёт **безопасность данных и полный контроль доступа** на уровне агента; граница доверия — твоя аутентификация и твой backend.
+- **Authentication** — who the principal is (JWT, API key, session), and where `Principal` comes from before calling `runAgentLoop`.
+- **Secrets** — do not log keys and tokens; do not pass them in the goal or in messages unless needed.
+- **Payments, limits, fraud** — outside the framework; you can use `principal` and `runId` in your billing and limit logic.
+- **Audit** — optionally log `principalId`, `runId`, called tool names (without sensitive args) yourself.
 
 ---
 
-## 7. Типичные проблемы агентных систем
+## 6. Recommendations
 
-Prompt injection, supply-chain плагинов, экспоз gateway, приватность, нестабильность сессий, непредсказуемость вывода, производительность — и как TaskPilot их закрывает или учитывает: **[docs/PROBLEMS_AND_SOLUTIONS.md](./docs/PROBLEMS_AND_SOLUTIONS.md)**.
+1. Always set **accessContext** for user runs and use **ScopedLongTermMemory** for personal memory.
+2. Create a **new BufferMemory** for each run (do not reuse between users).
+3. Set **AccessPolicy** on the shared ToolRegistry (or per-role registries) and use **guard** when needed (e.g. to ensure the user does not pass other users' ids).
+4. In tools that call your backend, pass **principal.id** (and tenantId if needed) in headers or body and verify permissions on the backend.
+5. Do not include secrets and PII in **goal** and **systemPrompt** if they are logged; mask them in your wrapper if needed.
+6. **Untrusted content** (pages, emails, third-party messages) — pass **only in user message**, never in system or as instruction; use Tools firewall (AccessPolicy) and preferably a separate block in the prompt ("External content: …").
+
+With this, the framework provides **data security and full access control** at the agent level; the trust boundary is your authentication and your backend.
+
+---
+
+## 7. Common Agent System Problems
+
+Prompt injection, supply-chain plugins, exposed gateway, privacy, session instability, output unpredictability, performance — and how TaskPilot addresses them: **[docs/PROBLEMS_AND_SOLUTIONS.md](./docs/PROBLEMS_AND_SOLUTIONS.md)**.

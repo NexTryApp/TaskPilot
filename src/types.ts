@@ -4,7 +4,7 @@
  * Security: Principal, AccessContext, ToolGuard for full access control.
  */
 
-/** Субъект доступа: кто выполняет запуск агента (пользователь, тенант, роли, скоупы). */
+/** Access subject: who is executing the agent (user, tenant, roles, scopes). */
 export interface Principal {
   id: string;
   tenantId?: string;
@@ -13,26 +13,26 @@ export interface Principal {
   metadata?: Record<string, unknown>;
 }
 
-/** Контекст доступа на время ранна: principal + runId, передаётся в проверки доступа и в инструменты. */
+/** Access context for the run: principal + runId, passed to access checks and to tools. */
 export interface AccessContext {
   principal: Principal;
   runId: string;
 }
 
-/** Проверка доступа к вызову инструмента. Возвращает true или выбрасывает / возвращает ошибку. */
+/** Access check for tool invocation. Returns true or throws/returns error. */
 export type ToolGuard = (
   context: AccessContext,
   toolName: string,
   args: Record<string, unknown>
 ) => boolean | void | Promise<boolean | void>;
 
-/** Политика доступа: какие инструменты и с какими ограничениями доступны principal. */
+/** Access policy: which tools and with what restrictions are available to principal. */
 export interface AccessPolicy {
-  /** Разрешённые имена инструментов (если пусто — запрещено всё; ['*'] — все). */
+  /** Allowed tool names (if empty — all denied; ['*'] — all allowed). */
   allowedTools?: string[];
-  /** Запрещённые имена инструментов. */
+  /** Denied tool names. */
   deniedTools?: string[];
-  /** Опциональная проверка перед каждым вызовом (например, по args). */
+  /** Optional check before each invocation (e.g. based on args). */
   guard?: ToolGuard;
 }
 
@@ -67,7 +67,7 @@ export interface AgentGoal {
   goal: string;
   runId?: string;
   metadata?: Record<string, unknown>;
-  /** Контекст доступа для проверок и изоляции данных. */
+  /** Access context for checks and data isolation. */
   accessContext?: AccessContext;
 }
 
@@ -89,7 +89,7 @@ export interface AgentRunState {
   done: boolean;
   finalAnswer?: string;
   metadata?: Record<string, unknown>;
-  /** Principal, выполнивший ран (если был передан accessContext). */
+  /** Principal who executed the run (if accessContext was passed). */
   principalId?: string;
 }
 
@@ -113,9 +113,9 @@ export interface LongTermMemory {
   add(entry: Omit<MemoryEntry, 'id' | 'createdAt'>): Promise<MemoryEntry>;
 }
 
-/** Долгосрочная память с изоляцией по scope (например, по principalId/tenantId). */
+/** Long-term memory with scope-based isolation (e.g. by principalId/tenantId). */
 export interface ScopedLongTermMemory extends LongTermMemory {
-  /** Установить scope для следующих search/add (например, principal.id). */
+  /** Set scope for subsequent search/add (e.g. principal.id). */
   setScope(scope: string): void;
 }
 

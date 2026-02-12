@@ -1,6 +1,6 @@
 /**
- * Audit logger: логирование каждого вызова инструмента и ключевых событий ранна.
- * По умолчанию пишет в console; можно передать свой handler (БД, файл, внешний сервис).
+ * Audit logger: logs each tool invocation and key run events.
+ * By default writes to console; can provide custom handler (DB, file, external service).
  */
 
 import type { AccessContext } from '../types.js';
@@ -12,11 +12,11 @@ export interface AuditEntry {
   principalId?: string;
   tenantId?: string;
   toolName?: string;
-  /** Аргументы вызова (без секретов — ответственность вызывающего). */
+  /** Call arguments (no secrets — caller's responsibility). */
   args?: Record<string, unknown>;
-  /** Ошибка, если была. */
+  /** Error, if any. */
   error?: string;
-  /** Дополнительные данные. */
+  /** Additional data. */
   meta?: Record<string, unknown>;
 }
 
@@ -38,7 +38,7 @@ export class AuditLogger {
     try {
       this.handler(entry);
     } catch {
-      // audit не должен ломать основной поток
+      // audit must not break the main flow
     }
   }
 

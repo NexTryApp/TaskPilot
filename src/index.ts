@@ -1,8 +1,8 @@
 /**
- * TaskPilot — самостоятельный фреймворк автономного AI-агента.
- * LLM + agent loop + tools + memory. Ноль внешних runtime-зависимостей.
+ * TaskPilot — standalone autonomous AI agent framework.
+ * LLM + agent loop + tools + memory. Zero external runtime dependencies.
  *
- * Использование:
+ * Usage:
  *   const memory = new BufferMemory();
  *   const tools = new ToolRegistry();
  *   tools.register(someTool);

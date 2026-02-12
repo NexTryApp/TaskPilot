@@ -1,6 +1,6 @@
 /**
- * Output validator: проверяет final answer агента по JSON schema.
- * Простая реализация без внешних зависимостей; для сложных schema — подключить ajv/zod.
+ * Output validator: validates agent's final answer against JSON schema.
+ * Simple implementation without external dependencies; for complex schemas — use ajv/zod.
  */
 
 export interface ValidationResult {
@@ -72,8 +72,8 @@ export function validateOutput(output: unknown, schema: OutputSchema): Validatio
 }
 
 /**
- * Парсит final answer как JSON и валидирует по schema.
- * Если final answer — не JSON, считает его строкой и проверяет по schema.type === 'string'.
+ * Parses final answer as JSON and validates against schema.
+ * If final answer is not JSON, treats it as string and validates against schema.type === 'string'.
  */
 export function validateFinalAnswer(finalAnswer: string | undefined, schema: OutputSchema): ValidationResult {
   if (finalAnswer === undefined) {

@@ -2,46 +2,44 @@ TaskPilot Source Available License v1.0
 
 Copyright (c) 2026 NexTryApp
 
-Настоящим предоставляется разрешение любому лицу, получившему копию
-данного программного обеспечения и сопутствующей документации
-(далее — «Программное обеспечение»), использовать Программное обеспечение
-на следующих условиях:
+Permission is hereby granted to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to use the Software
+subject to the following conditions:
 
-1. РАЗРЕШЁННОЕ ИСПОЛЬЗОВАНИЕ
-   Вы можете использовать, копировать, изменять и распространять
-   Программное обеспечение в любых целях (включая коммерческие)
-   при соблюдении условий, указанных ниже.
+1. PERMITTED USE
+   You may use, copy, modify, and distribute the Software for any purpose
+   (including commercial use) provided that you comply with the conditions
+   set forth below.
 
-2. ОБЯЗАТЕЛЬНОЕ УПОМИНАНИЕ (ATTRIBUTION)
-   При любом публичном использовании Программного обеспечения
-   (веб-сайт, веб-приложение, API, SaaS, мобильное приложение,
-   печатные материалы, презентации и т.д.) вы ОБЯЗАНЫ разместить
-   видимое упоминание:
+2. REQUIRED ATTRIBUTION
+   For any public use of the Software (website, web application, API, SaaS,
+   mobile application, printed materials, presentations, etc.), you MUST
+   display a visible attribution:
 
-       «Powered by TaskPilot (github.com/NexTryApp/TaskPilot)»
+       "Powered by TaskPilot (github.com/NexTryApp/TaskPilot)"
 
-   или эквивалентную ссылку на репозиторий.
+   or an equivalent link to the repository.
 
-   Упоминание должно быть:
-   - на видимом месте (footer сайта, страница «About», раздел
-     «Credits», README проекта, или аналогичное);
-   - доступно конечному пользователю без дополнительных действий;
-   - содержать активную ссылку (для веб — гиперссылку).
+   The attribution must be:
+   - placed in a visible location (site footer, "About" page, "Credits"
+     section, project README, or equivalent);
+   - accessible to end users without additional actions;
+   - in the case of web, include an active hyperlink.
 
-3. ЗАПРЕТ УДАЛЕНИЯ АТРИБУЦИИ
-   Запрещается удалять, скрывать или делать нечитаемым упоминание
-   TaskPilot и ссылку на репозиторий из любых производных работ,
-   форков или дистрибутивов.
+3. NO REMOVAL OF ATTRIBUTION
+   You may not remove, hide, or make unreadable the TaskPilot attribution
+   and link to the repository from any derivative works, forks, or
+   distributions.
 
-4. ОТКАЗ ОТ ГАРАНТИЙ
-   ПРОГРАММНОЕ ОБЕСПЕЧЕНИЕ ПРЕДОСТАВЛЯЕТСЯ «КАК ЕСТЬ», БЕЗ КАКИХ-ЛИБО
-   ГАРАНТИЙ, ЯВНЫХ ИЛИ ПОДРАЗУМЕВАЕМЫХ, ВКЛЮЧАЯ, НО НЕ ОГРАНИЧИВАЯСЬ,
-   ГАРАНТИЯМИ ТОВАРНОЙ ПРИГОДНОСТИ, СООТВЕТСТВИЯ ОПРЕДЕЛЁННОЙ ЦЕЛИ
-   И НЕНАРУШЕНИЯ ПРАВ. НИ В КАКОМ СЛУЧАЕ АВТОРЫ ИЛИ ПРАВООБЛАДАТЕЛИ
-   НЕ НЕСУТ ОТВЕТСТВЕННОСТИ ЗА ЛЮБЫЕ ПРЕТЕНЗИИ, УБЫТКИ ИЛИ ИНУЮ
-   ОТВЕТСТВЕННОСТЬ, ВОЗНИКАЮЩУЮ ИЗ ИСПОЛЬЗОВАНИЯ ПРОГРАММНОГО
-   ОБЕСПЕЧЕНИЯ ИЛИ ИНЫХ ДЕЙСТВИЙ С НИМ.
+4. DISCLAIMER OF WARRANTIES
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+   IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+   CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+   TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-5. ПРЕКРАЩЕНИЕ ДЕЙСТВИЯ
-   Нарушение любого из условий автоматически прекращает ваши права
-   по данной лицензии.
+5. TERMINATION
+   Violation of any of these conditions automatically terminates your
+   rights under this license.

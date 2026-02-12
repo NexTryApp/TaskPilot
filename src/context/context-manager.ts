@@ -1,17 +1,17 @@
 /**
- * Context window manager: скользящее окно + автосводка.
- * Контролирует, чтобы количество сообщений не превышало лимит.
- * При превышении — старые сообщения заменяются на summary.
+ * Context window manager: sliding window + auto-summary.
+ * Ensures message count does not exceed the limit.
+ * When exceeded — old messages are replaced with summary.
  */
 
 import type { Message, LLMAdapter, ToolDefinition } from '../types.js';
 
 export interface ContextManagerOptions {
-  /** Максимум сообщений в окне (включая system). По умолчанию 20. */
+  /** Max messages in window (including system). Default 20. */
   maxMessages?: number;
-  /** Сколько недавних сообщений всегда сохранять при обрезке. По умолчанию 6. */
+  /** How many recent messages to always keep when trimming. Default 6. */
   keepRecent?: number;
-  /** Если true — генерировать summary через LLM; иначе — просто обрезать. По умолчанию false. */
+  /** If true — generate summary via LLM; otherwise — just trim. Default false. */
   useLLMSummary?: boolean;
 }
 
@@ -27,8 +27,8 @@ export class ContextManager {
   }
 
   /**
-   * Если сообщений больше maxMessages — обрезать.
-   * Возвращает сообщения в пределах окна: system + [summary?] + recent.
+   * If messages exceed maxMessages — trim.
+   * Returns messages within window: system + [summary?] + recent.
    */
   async trimMessages(messages: Message[], llm?: LLMAdapter): Promise<Message[]> {
     if (messages.length <= this.maxMessages) return messages;

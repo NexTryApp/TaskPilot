@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskPilot</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>TaskPilot</h1>
+      <p class="subtitle">Autonomous AI Agent</p>
+    </header>
+
+    <main>
+      <!-- Step 1: Provider -->
+      <section class="card">
+        <h2>1. Provider</h2>
+        <div class="provider-grid">
+          <button class="provider-btn selected" data-provider="openai" data-url="https://api.openai.com/v1">
+            <span class="provider-name">OpenAI</span>
+            <span class="provider-models">gpt-4o, gpt-4o-mini, o3-mini</span>
+          </button>
+          <button class="provider-btn" data-provider="deepseek" data-url="https://api.deepseek.com/v1">
+            <span class="provider-name">DeepSeek</span>
+            <span class="provider-models">deepseek-chat, deepseek-reasoner</span>
+          </button>
+          <button class="provider-btn" data-provider="groq" data-url="https://api.groq.com/openai/v1">
+            <span class="provider-name">Groq</span>
+            <span class="provider-models">llama-3.3-70b, mixtral-8x7b</span>
+          </button>
+          <button class="provider-btn" data-provider="gemini" data-url="https://generativelanguage.googleapis.com/v1beta/openai">
+            <span class="provider-name">Google Gemini</span>
+            <span class="provider-models">gemini-2.0-flash, gemini-2.5-pro</span>
+          </button>
+          <button class="provider-btn" data-provider="anthropic" data-url="https://api.anthropic.com/v1">
+            <span class="provider-name">Anthropic</span>
+            <span class="provider-models">claude-sonnet-4, claude-3.5-haiku</span>
+          </button>
+          <button class="provider-btn" data-provider="mistral" data-url="https://api.mistral.ai/v1">
+            <span class="provider-name">Mistral</span>
+            <span class="provider-models">mistral-large, mistral-small</span>
+          </button>
+          <button class="provider-btn" data-provider="together" data-url="https://api.together.xyz/v1">
+            <span class="provider-name">Together</span>
+            <span class="provider-models">Llama-3.3-70B, Qwen2.5-72B</span>
+          </button>
+          <button class="provider-btn" data-provider="openrouter" data-url="https://openrouter.ai/api/v1">
+            <span class="provider-name">OpenRouter</span>
+            <span class="provider-models">200+ models</span>
+          </button>
+          <button class="provider-btn" data-provider="ollama" data-url="http://localhost:11434/v1">
+            <span class="provider-name">Ollama (local)</span>
+            <span class="provider-models">llama3, mistral, qwen2.5</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 2: API Key + Model -->
+      <section class="card">
+        <h2>2. Settings</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="apiKey">API Key</label>
+            <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+            <span class="hint" id="keyHint">Key is not sent to third-party servers — only directly to the provider</span>
+          </div>
+          <div class="form-group">
+            <label for="model">Model</label>
+            <input type="text" id="model" value="gpt-4o-mini" placeholder="gpt-4o-mini">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="maxSteps">Max steps</label>
+            <input type="number" id="maxSteps" value="10" min="1" max="50">
+          </div>
+          <div class="form-group">
+            <label for="maxTokens">Token limit (0 = unlimited)</label>
+            <input type="number" id="maxTokens" value="0" min="0">
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3: Tools -->
+      <section class="card">
+        <h2>3. Tools</h2>
+        <div class="tools-list" id="toolsList">
+          <label class="tool-toggle">
+            <input type="checkbox" data-tool="get_weather" checked>
+            <span class="tool-info">
+              <strong>get_weather</strong> — Get weather by city
+            </span>
+          </label>
+          <label class="tool-toggle">
+            <input type="checkbox" data-tool="create_task" checked>
+            <span class="tool-info">
+              <strong>create_task</strong> — Create task
+            </span>
+          </label>
+          <label class="tool-toggle">
+            <input type="checkbox" data-tool="search_web">
+            <span class="tool-info">
+              <strong>search_web</strong> — Search the web
+            </span>
+          </label>
+          <label class="tool-toggle">
+            <input type="checkbox" data-tool="send_message">
+            <span class="tool-info">
+              <strong>send_message</strong> — Send message
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Step 4: Goal -->
+      <section class="card">
+        <h2>4. Agent goal</h2>
+        <textarea id="goal" rows="3" placeholder="e.g.: Find weather in Moscow and create task &quot;Check weather&quot;"></textarea>
+        <button class="btn-start" id="btnStart">Start agent</button>
+      </section>
+
+      <!-- Output -->
+      <section class="card output-card" id="outputCard" style="display:none">
+        <h2>Result</h2>
+        <div class="status-bar" id="statusBar">
+          <span class="status-dot running"></span>
+          <span id="statusText">Agent is running...</span>
+        </div>
+        <div class="log" id="logOutput"></div>
+        <div class="final-answer" id="finalAnswer" style="display:none">
+          <h3>Agent's answer</h3>
+          <div id="answerText"></div>
+        </div>
+        <div class="run-meta" id="runMeta" style="display:none"></div>
+      </section>
+    </main>
+
+    <footer>
+      Powered by <a href="https://github.com/NexTryApp/TaskPilot" target="_blank">TaskPilot</a>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

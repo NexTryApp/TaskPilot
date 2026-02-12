@@ -30,13 +30,13 @@ function generateId(): string {
 export interface AgentLoopOptions {
   maxSteps?: number;
   systemPrompt?: string;
-  /** TTL для кеша результатов инструментов (мс). 0 = бессрочно в пределах ранна. undefined = кеш выключен. */
+  /** TTL for tool result cache (ms). 0 = indefinite within run. undefined = cache disabled. */
   toolCacheTtlMs?: number;
-  /** Кастомный обработчик аудита; по умолчанию console.log JSON. undefined = без аудита. */
+  /** Custom audit handler; defaults to console.log JSON. undefined = no audit. */
   auditHandler?: AuditHandler | null;
-  /** Настройки контекстного окна. undefined = без обрезки. */
+  /** Context window options. undefined = no trimming. */
   contextWindow?: ContextManagerOptions;
-  /** Лимит токенов на ран. 0 = без лимита. */
+  /** Token limit per run. 0 = unlimited. */
   maxTokens?: number;
 }
 
@@ -53,7 +53,7 @@ export async function runAgentLoop(
     options.systemPrompt ??
     `You are an autonomous agent. Achieve the user's goal step by step. Use tools when needed. When done, respond with a final answer.`;
 
-  // --- Новые компоненты ---
+  // --- Core components ---
   const toolCache = options.toolCacheTtlMs !== undefined
     ? new ToolCache({ ttlMs: options.toolCacheTtlMs })
     : null;
@@ -70,7 +70,7 @@ export async function runAgentLoop(
     ? new TokenTracker({ maxTokens: options.maxTokens })
     : null;
 
-  // --- Инициализация ---
+  // --- Initialization ---
   memory.clear();
   const runId = goal.runId ?? `run_${Date.now()}`;
   const accessContext: AccessContext | undefined = goal.accessContext

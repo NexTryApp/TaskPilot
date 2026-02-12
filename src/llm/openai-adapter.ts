@@ -54,14 +54,14 @@ function toolsToOpenAI(tools: ToolDefinition[]): unknown[] {
 }
 
 export interface OpenAIAdapterOptions {
-  /** API key. По умолчанию берётся из OPENAI_API_KEY. */
+  /** API key. Defaults to OPENAI_API_KEY env. */
   apiKey?: string;
-  /** Модель: gpt-4o, gpt-4o-mini, o3-mini и т.д. По умолчанию gpt-4o-mini. */
+  /** Model: gpt-4o, gpt-4o-mini, o3-mini, etc. Default gpt-4o-mini. */
   model?: string;
   /**
-   * Base URL провайдера (без /chat/completions).
-   * Примеры:
-   *   OpenAI:      https://api.openai.com/v1         (по умолчанию)
+   * Provider base URL (without /chat/completions).
+   * Examples:
+   *   OpenAI:      https://api.openai.com/v1         (default)
    *   Anthropic:   https://api.anthropic.com/v1
    *   Google:      https://generativelanguage.googleapis.com/v1beta/openai
    *   Groq:        https://api.groq.com/openai/v1

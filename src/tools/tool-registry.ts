@@ -19,7 +19,7 @@ export class ToolRegistry {
     this.tools.set(executor.name, executor);
   }
 
-  /** Задать политику доступа: какие инструменты кому доступны, опционально guard. */
+  /** Set access policy: which tools are available to whom, optionally with guard. */
   setAccessPolicy(policy: AccessPolicy | null): void {
     this.policy = policy;
   }

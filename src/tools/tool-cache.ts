@@ -1,6 +1,6 @@
 /**
- * Tool result cache: дедупликация повторных вызовов инструментов.
- * Ключ = tool name + JSON.stringify(args). TTL опционален.
+ * Tool result cache: deduplication of repeated tool invocations.
+ * Key = tool name + JSON.stringify(args). TTL is optional.
  */
 
 export interface CacheEntry {
@@ -9,7 +9,7 @@ export interface CacheEntry {
 }
 
 export interface ToolCacheOptions {
-  /** TTL в миллисекундах; 0 = бессрочно (до конца ранна). По умолчанию 0. */
+  /** TTL in milliseconds; 0 = indefinite (until end of run). Default 0. */
   ttlMs?: number;
 }
 

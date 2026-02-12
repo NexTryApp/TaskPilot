@@ -1,5 +1,5 @@
 /**
- * Пример запуска TaskPilot со всеми компонентами:
+ * Example of running TaskPilot with all components:
  * access control, tool cache, audit, context window, token budget, output validation.
  */
 
@@ -15,7 +15,7 @@ import {
 import type { Principal, AuditEntry, LLMActionResponse } from '../src/index.js';
 
 async function main() {
-  // --- Principal (кто запускает агента) ---
+  // --- Principal (who runs the agent) ---
   const principal: Principal = {
     id: 'user_42',
     tenantId: 'acme',
@@ -23,13 +23,13 @@ async function main() {
     scopes: ['tasks:read', 'tasks:write', 'weather:read'],
   };
 
-  // --- Память ---
+  // --- Memory ---
   const memory = new BufferMemory();
   const longTerm = new ScopedLongTermMemoryImpl();
   longTerm.setScope(principal.id);
-  await longTerm.add({ content: 'Пользователь предпочитает ответы на русском.', metadata: { source: 'profile' } });
+  await longTerm.add({ content: 'User prefers responses in English.', metadata: { source: 'profile' } });
 
-  // --- Инструменты ---
+  // --- Tools ---
   const tools = new ToolRegistry();
 
   tools.register({
@@ -80,18 +80,18 @@ async function main() {
     },
   });
 
-  // --- Политика доступа ---
+  // --- Access policy ---
   tools.setAccessPolicy({
     allowedTools: ['get_weather', 'create_task'],
     deniedTools: ['delete_task'],
     guard: async (ctx, toolName, args) => {
-      // Пример: только тенант 'acme' может создавать задачи
+      // Example: only tenant 'acme' can create tasks
       if (toolName === 'create_task' && ctx.principal.tenantId !== 'acme') return false;
       return true;
     },
   });
 
-  // --- Audit (логирование) ---
+  // --- Audit (logging) ---
   const auditLog: AuditEntry[] = [];
   function auditHandler(entry: AuditEntry): void {
     auditLog.push(entry);
@@ -105,17 +105,17 @@ async function main() {
     : new MockLLMAdapter({
         respond: (_goal): LLMActionResponse => {
           stepIndex++;
-          if (stepIndex === 1) return { thought: 'Сначала узнаю погоду.', action: { tool: 'get_weather', arguments: { city: 'Moscow' } } };
-          if (stepIndex === 2) return { thought: 'Теперь создаю задачу.', action: { tool: 'create_task', arguments: { title: 'Проверить погоду', steps: ['Открыть приложение', 'Посмотреть прогноз'] } } };
-          if (stepIndex === 3) return { thought: 'Попробую удалить (будет denied).', action: { tool: 'delete_task', arguments: { taskId: 'task_1' } } };
-          return { finalAnswer: 'Готово: погода в Москве — 18°C, солнечно. Задача "Проверить погоду" создана.' };
+          if (stepIndex === 1) return { thought: 'First, I will check the weather.', action: { tool: 'get_weather', arguments: { city: 'Moscow' } } };
+          if (stepIndex === 2) return { thought: 'Now I will create the task.', action: { tool: 'create_task', arguments: { title: 'Check weather', steps: ['Open app', 'View forecast'] } } };
+          if (stepIndex === 3) return { thought: 'I will try to delete (will be denied).', action: { tool: 'delete_task', arguments: { taskId: 'task_1' } } };
+          return { finalAnswer: 'Done: weather in Moscow — 18°C, sunny. Task "Check weather" created.' };
         },
       });
 
-  // --- Запуск агента ---
+  // --- Run agent ---
   const state = await runAgentLoop(
     {
-      goal: 'Узнай погоду в Москве и создай задачу "Проверить погоду".',
+      goal: 'Find weather in Moscow and create task "Check weather".',
       accessContext: { principal, runId: 'demo_run_1' },
     },
     memory,
@@ -124,15 +124,15 @@ async function main() {
     longTerm,
     {
       maxSteps: 10,
-      systemPrompt: 'You are a helpful assistant. Use tools when needed. Reply briefly in Russian.',
-      toolCacheTtlMs: 0,                              // кеш на весь ран
-      auditHandler,                                    // аудит
-      contextWindow: { maxMessages: 20, keepRecent: 6 }, // скользящее окно
-      maxTokens: 50_000,                                // бюджет токенов
+      systemPrompt: 'You are a helpful assistant. Use tools when needed. Reply briefly in English.',
+      toolCacheTtlMs: 0,                              // cache for entire run
+      auditHandler,                                    // audit
+      contextWindow: { maxMessages: 20, keepRecent: 6 }, // sliding window
+      maxTokens: 50_000,                                // token budget
     }
   );
 
-  // --- Результат ---
+  // --- Result ---
   console.log('\n=== Agent Result ===');
   console.log('Done:', state.done);
   console.log('Steps:', state.currentStep);
@@ -140,11 +140,11 @@ async function main() {
   console.log('Final:', state.finalAnswer);
   console.log('Messages:', state.messages.length);
 
-  // --- Валидация вывода ---
+  // --- Output validation ---
   const validation = validateFinalAnswer(state.finalAnswer, { type: 'string' });
   console.log('\nOutput valid:', validation.valid, validation.errors.length ? validation.errors : '');
 
-  // --- Аудит ---
+  // --- Audit ---
   console.log('\n=== Audit Log ===');
   for (const entry of auditLog) {
     console.log(`  ${entry.event} | tool=${entry.toolName ?? '-'} | error=${entry.error ?? '-'}`);
