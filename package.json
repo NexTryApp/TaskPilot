@@ -1,0 +1,26 @@
+{
+  "name": "taskpilot",
+  "version": "0.1.0",
+  "description": "TaskPilot: самостоятельный фреймворк автономного AI-агента (loop, tools, memory, LLM). Свой стек, ноль внешних зависимостей.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "example": "tsx example/run-agent.ts"
+  },
+  "keywords": [
+    "agent",
+    "llm",
+    "tools",
+    "autonomous"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependenciesMeta": {}
+}
