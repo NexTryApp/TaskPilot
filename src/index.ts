@@ -12,7 +12,7 @@
 
 // --- Core ---
 export { runAgentLoop } from './agent-loop.js';
-export type { AgentLoopOptions } from './agent-loop.js';
+export type { AgentLoopOptions, AgentStepEvent, AgentWorkspace, OnStepCallback } from './agent-loop.js';
 
 // --- Tools ---
 export { ToolRegistry, AccessDeniedError } from './tools/tool-registry.js';

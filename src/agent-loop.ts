@@ -27,6 +27,37 @@ function generateId(): string {
   return `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Platform/location where the agent is currently operating. */
+export interface AgentWorkspace {
+  /** Platform identifier: telegram, chrome, terminal, api, task-manager, etc. */
+  platform: string;
+  /** Human-readable platform name */
+  platformLabel: string;
+  /** Current location: URL, chat name, command, etc. */
+  location?: string;
+  /** Current status text */
+  status?: string;
+  /** Icon hint for the UI */
+  icon?: string;
+}
+
+/** Real-time step event emitted during agent execution. */
+export interface AgentStepEvent {
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'tool_denied' | 'answer' | 'status' | 'error';
+  step: number;
+  timestamp: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  result?: unknown;
+  content?: string;
+  context?: string;
+  error?: string;
+  /** Active workspace/platform context for this event */
+  workspace?: AgentWorkspace;
+}
+
+export type OnStepCallback = (event: AgentStepEvent) => void;
+
 export interface AgentLoopOptions {
   maxSteps?: number;
   systemPrompt?: string;
@@ -38,6 +69,8 @@ export interface AgentLoopOptions {
   contextWindow?: ContextManagerOptions;
   /** Token limit per run. 0 = unlimited. */
   maxTokens?: number;
+  /** Callback for real-time step events. */
+  onStep?: OnStepCallback;
 }
 
 export async function runAgentLoop(
@@ -94,6 +127,13 @@ export async function runAgentLoop(
   }
   memory.append({ role: 'user', content: goalText });
 
+  const onStep = options.onStep;
+  function emit(event: Omit<AgentStepEvent, 'timestamp'>): void {
+    onStep?.({ ...event, timestamp: new Date().toISOString() } as AgentStepEvent);
+  }
+
+  emit({ type: 'status', step: 0, content: 'Agent started', context: 'initialization' });
+
   let step = 0;
   let done = false;
   let finalAnswer: string | undefined;
@@ -103,10 +143,12 @@ export async function runAgentLoop(
     if (tokenTracker?.isExceeded) {
       finalAnswer = '[Token budget exceeded]';
       done = true;
+      emit({ type: 'status', step, content: 'Token budget exceeded' });
       break;
     }
 
     step++;
+    emit({ type: 'thinking', step, content: 'LLM is processing...', context: 'llm' });
 
     // Context window trimming
     let messages = memory.getMessages();
@@ -126,6 +168,10 @@ export async function runAgentLoop(
     const responseText = (response.thought ?? '') + (response.finalAnswer ?? '');
     tokenTracker?.addFromText(responseText);
 
+    if (response.thought) {
+      emit({ type: 'thinking', step, content: response.thought, context: 'llm' });
+    }
+
     if (response.finalAnswer != null && response.finalAnswer.trim() !== '') {
       finalAnswer = response.finalAnswer.trim();
       done = true;
@@ -133,6 +179,7 @@ export async function runAgentLoop(
         role: 'assistant',
         content: (response.thought ? response.thought + '\n\n' : '') + finalAnswer,
       });
+      emit({ type: 'answer', step, content: finalAnswer });
       break;
     }
 
@@ -152,10 +199,12 @@ export async function runAgentLoop(
       // Cache check
       const cached = toolCache?.get(response.action.tool, response.action.arguments);
       if (cached) {
+        emit({ type: 'tool_result', step, tool: response.action.tool, result: cached.result, content: 'Cached result' });
         memory.appendToolResult(toolCallId, cached.result);
         continue;
       }
 
+      emit({ type: 'tool_call', step, tool: response.action.tool, args: response.action.arguments, context: response.action.tool });
       audit?.toolCall(accessContext, response.action.tool, response.action.arguments);
 
       let result: string | unknown;
@@ -169,6 +218,9 @@ export async function runAgentLoop(
         const errMsg = err instanceof Error ? err.message : String(err);
         if (err instanceof Error && err.name === 'AccessDeniedError') {
           audit?.toolDenied(accessContext, response.action.tool, errMsg);
+          emit({ type: 'tool_denied', step, tool: response.action.tool, error: errMsg });
+        } else {
+          emit({ type: 'error', step, tool: response.action.tool, error: errMsg });
         }
         result = errMsg;
         memory.appendToolResult(toolCallId, result, true);
@@ -178,9 +230,9 @@ export async function runAgentLoop(
       // Cache store
       toolCache?.set(response.action.tool, response.action.arguments, result);
 
-      audit?.toolResult(accessContext, response.action.tool, {
-        resultPreview: String(typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 200),
-      });
+      const preview = String(typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 200);
+      audit?.toolResult(accessContext, response.action.tool, { resultPreview: preview });
+      emit({ type: 'tool_result', step, tool: response.action.tool, result, content: preview });
 
       memory.appendToolResult(toolCallId, result);
       continue;
@@ -192,6 +244,7 @@ export async function runAgentLoop(
     if (!response.action && !response.finalAnswer) {
       finalAnswer = response.thought ?? 'No further action.';
       done = true;
+      emit({ type: 'answer', step, content: finalAnswer });
     }
   }
 

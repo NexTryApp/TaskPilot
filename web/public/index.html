@@ -7,139 +7,155 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>TaskPilot</h1>
-      <p class="subtitle">Autonomous AI Agent</p>
-    </header>
+  <div class="layout">
+    <!-- Left: Config Panel -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>TaskPilot</h1>
+      </div>
 
-    <main>
-      <!-- Step 1: Provider -->
-      <section class="card">
-        <h2>1. Provider</h2>
-        <div class="provider-grid">
-          <button class="provider-btn selected" data-provider="openai" data-url="https://api.openai.com/v1">
-            <span class="provider-name">OpenAI</span>
-            <span class="provider-models">gpt-4o, gpt-4o-mini, o3-mini</span>
-          </button>
-          <button class="provider-btn" data-provider="deepseek" data-url="https://api.deepseek.com/v1">
-            <span class="provider-name">DeepSeek</span>
-            <span class="provider-models">deepseek-chat, deepseek-reasoner</span>
-          </button>
-          <button class="provider-btn" data-provider="groq" data-url="https://api.groq.com/openai/v1">
-            <span class="provider-name">Groq</span>
-            <span class="provider-models">llama-3.3-70b, mixtral-8x7b</span>
-          </button>
-          <button class="provider-btn" data-provider="gemini" data-url="https://generativelanguage.googleapis.com/v1beta/openai">
-            <span class="provider-name">Google Gemini</span>
-            <span class="provider-models">gemini-2.0-flash, gemini-2.5-pro</span>
-          </button>
-          <button class="provider-btn" data-provider="anthropic" data-url="https://api.anthropic.com/v1">
-            <span class="provider-name">Anthropic</span>
-            <span class="provider-models">claude-sonnet-4, claude-3.5-haiku</span>
-          </button>
-          <button class="provider-btn" data-provider="mistral" data-url="https://api.mistral.ai/v1">
-            <span class="provider-name">Mistral</span>
-            <span class="provider-models">mistral-large, mistral-small</span>
-          </button>
-          <button class="provider-btn" data-provider="together" data-url="https://api.together.xyz/v1">
-            <span class="provider-name">Together</span>
-            <span class="provider-models">Llama-3.3-70B, Qwen2.5-72B</span>
-          </button>
-          <button class="provider-btn" data-provider="openrouter" data-url="https://openrouter.ai/api/v1">
-            <span class="provider-name">OpenRouter</span>
-            <span class="provider-models">200+ models</span>
-          </button>
-          <button class="provider-btn" data-provider="ollama" data-url="http://localhost:11434/v1">
-            <span class="provider-name">Ollama (local)</span>
-            <span class="provider-models">llama3, mistral, qwen2.5</span>
-          </button>
-        </div>
-      </section>
+      <div class="sidebar-scroll">
+        <!-- Provider -->
+        <section class="panel">
+          <h2>Provider</h2>
+          <div class="provider-grid">
+            <button class="provider-btn selected" data-provider="openai" data-url="https://api.openai.com/v1">OpenAI</button>
+            <button class="provider-btn" data-provider="deepseek" data-url="https://api.deepseek.com/v1">DeepSeek</button>
+            <button class="provider-btn" data-provider="groq" data-url="https://api.groq.com/openai/v1">Groq</button>
+            <button class="provider-btn" data-provider="gemini" data-url="https://generativelanguage.googleapis.com/v1beta/openai">Gemini</button>
+            <button class="provider-btn" data-provider="anthropic" data-url="https://api.anthropic.com/v1">Anthropic</button>
+            <button class="provider-btn" data-provider="mistral" data-url="https://api.mistral.ai/v1">Mistral</button>
+            <button class="provider-btn" data-provider="together" data-url="https://api.together.xyz/v1">Together</button>
+            <button class="provider-btn" data-provider="openrouter" data-url="https://openrouter.ai/api/v1">OpenRouter</button>
+            <button class="provider-btn" data-provider="ollama" data-url="http://localhost:11434/v1">Ollama</button>
+          </div>
+        </section>
 
-      <!-- Step 2: API Key + Model -->
-      <section class="card">
-        <h2>2. Settings</h2>
-        <div class="form-row">
+        <!-- Settings -->
+        <section class="panel">
+          <h2>Settings</h2>
           <div class="form-group">
             <label for="apiKey">API Key</label>
             <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
-            <span class="hint" id="keyHint">Key is not sent to third-party servers — only directly to the provider</span>
           </div>
           <div class="form-group">
             <label for="model">Model</label>
-            <input type="text" id="model" value="gpt-4o-mini" placeholder="gpt-4o-mini">
+            <input type="text" id="model" value="gpt-4o-mini">
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="maxSteps">Max steps</label>
+              <input type="number" id="maxSteps" value="10" min="1" max="50">
+            </div>
+            <div class="form-group">
+              <label for="maxTokens">Token limit</label>
+              <input type="number" id="maxTokens" value="0" min="0">
+            </div>
+          </div>
+        </section>
+
+        <!-- Tools -->
+        <section class="panel">
+          <h2>Tools</h2>
+          <div class="tools-list" id="toolsList">
+            <label class="tool-toggle">
+              <input type="checkbox" data-tool="telegram_send" checked>
+              <span class="tool-info"><strong>telegram_send</strong><span class="tool-ctx">Telegram</span></span>
+            </label>
+            <label class="tool-toggle">
+              <input type="checkbox" data-tool="telegram_read" checked>
+              <span class="tool-info"><strong>telegram_read</strong><span class="tool-ctx">Telegram</span></span>
+            </label>
+            <label class="tool-toggle">
+              <input type="checkbox" data-tool="browser_open" checked>
+              <span class="tool-info"><strong>browser_open</strong><span class="tool-ctx">Chrome</span></span>
+            </label>
+            <label class="tool-toggle">
+              <input type="checkbox" data-tool="browser_search" checked>
+              <span class="tool-info"><strong>browser_search</strong><span class="tool-ctx">Chrome</span></span>
+            </label>
+            <label class="tool-toggle">
+              <input type="checkbox" data-tool="terminal_run" checked>
+              <span class="tool-info"><strong>terminal_run</strong><span class="tool-ctx">Terminal</span></span>
+            </label>
+            <label class="tool-toggle">
+              <input type="checkbox" data-tool="create_task" checked>
+              <span class="tool-info"><strong>create_task</strong><span class="tool-ctx">Task Manager</span></span>
+            </label>
+            <label class="tool-toggle">
+              <input type="checkbox" data-tool="get_weather">
+              <span class="tool-info"><strong>get_weather</strong><span class="tool-ctx">Weather API</span></span>
+            </label>
+            <label class="tool-toggle">
+              <input type="checkbox" data-tool="send_email">
+              <span class="tool-info"><strong>send_email</strong><span class="tool-ctx">Email</span></span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Goal -->
+        <section class="panel">
+          <h2>Goal</h2>
+          <textarea id="goal" rows="3" placeholder="e.g.: Read Telegram messages, search the web for weather, and create a task"></textarea>
+          <button class="btn-start" id="btnStart">Start agent</button>
+        </section>
+      </div>
+    </aside>
+
+    <!-- Right: Dashboard -->
+    <main class="dashboard">
+      <!-- Top bar -->
+      <div class="dash-topbar">
+        <div class="status-indicator" id="statusIndicator">
+          <span class="status-dot idle"></span>
+          <span id="statusLabel">Idle</span>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="maxSteps">Max steps</label>
-            <input type="number" id="maxSteps" value="10" min="1" max="50">
-          </div>
-          <div class="form-group">
-            <label for="maxTokens">Token limit (0 = unlimited)</label>
-            <input type="number" id="maxTokens" value="0" min="0">
-          </div>
+        <div class="step-counter" id="stepCounter">Step 0 / 10</div>
+      </div>
+
+      <!-- Active Workspace -->
+      <section class="dash-card workspace-card">
+        <h3>Agent Workspace</h3>
+        <div class="workspace-channels" id="workspaceChannels">
+          <div class="feed-placeholder">Active connections will appear here when the agent starts</div>
         </div>
       </section>
 
-      <!-- Step 3: Tools -->
-      <section class="card">
-        <h2>3. Tools</h2>
-        <div class="tools-list" id="toolsList">
-          <label class="tool-toggle">
-            <input type="checkbox" data-tool="get_weather" checked>
-            <span class="tool-info">
-              <strong>get_weather</strong> — Get weather by city
-            </span>
-          </label>
-          <label class="tool-toggle">
-            <input type="checkbox" data-tool="create_task" checked>
-            <span class="tool-info">
-              <strong>create_task</strong> — Create task
-            </span>
-          </label>
-          <label class="tool-toggle">
-            <input type="checkbox" data-tool="search_web">
-            <span class="tool-info">
-              <strong>search_web</strong> — Search the web
-            </span>
-          </label>
-          <label class="tool-toggle">
-            <input type="checkbox" data-tool="send_message">
-            <span class="tool-info">
-              <strong>send_message</strong> — Send message
-            </span>
-          </label>
-        </div>
+      <!-- Permissions -->
+      <section class="dash-card permissions-card collapsed" id="permissionsCard">
+        <h3 class="collapsible" id="permToggle">Agent Permissions <span class="collapse-arrow">&#9656;</span></h3>
+        <div class="perm-grid" id="permGrid" style="display:none"></div>
       </section>
 
-      <!-- Step 4: Goal -->
-      <section class="card">
-        <h2>4. Agent goal</h2>
-        <textarea id="goal" rows="3" placeholder="e.g.: Find weather in Moscow and create task &quot;Check weather&quot;"></textarea>
-        <button class="btn-start" id="btnStart">Start agent</button>
+      <!-- Live Activity + Thoughts -->
+      <div class="dash-row dash-row-split">
+        <section class="dash-card activity-card">
+          <h3>Live Activity</h3>
+          <div class="activity-feed" id="activityFeed">
+            <div class="feed-placeholder">Events will appear here in real time</div>
+          </div>
+        </section>
+
+        <section class="dash-card thoughts-card">
+          <h3>Agent Thinking</h3>
+          <div class="thoughts-feed" id="thoughtsFeed">
+            <div class="feed-placeholder">Agent thoughts will appear here</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Final Answer -->
+      <section class="dash-card answer-card" id="answerCard" style="display:none">
+        <h3>Final Answer</h3>
+        <div id="answerText"></div>
       </section>
 
-      <!-- Output -->
-      <section class="card output-card" id="outputCard" style="display:none">
-        <h2>Result</h2>
-        <div class="status-bar" id="statusBar">
-          <span class="status-dot running"></span>
-          <span id="statusText">Agent is running...</span>
-        </div>
-        <div class="log" id="logOutput"></div>
-        <div class="final-answer" id="finalAnswer" style="display:none">
-          <h3>Agent's answer</h3>
-          <div id="answerText"></div>
-        </div>
-        <div class="run-meta" id="runMeta" style="display:none"></div>
+      <!-- Run Summary -->
+      <section class="dash-card summary-card" id="summaryCard" style="display:none">
+        <h3>Run Summary</h3>
+        <div id="summaryContent"></div>
       </section>
     </main>
-
-    <footer>
-      Powered by <a href="https://github.com/NexTryApp/TaskPilot" target="_blank">TaskPilot</a>
-    </footer>
   </div>
 
   <script src="app.js"></script>
