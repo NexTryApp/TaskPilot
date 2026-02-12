@@ -247,38 +247,43 @@ function renderInlinePermissions(channel) {
 }
 
 // ===== Channel Toggle =====
-document.querySelectorAll('.channel-card').forEach(card => {
-  const ch = card.dataset.channel;
-  const checkbox = card.querySelector('input[type="checkbox"]');
-  const body = card.querySelector('.channel-body');
-  const header = card.querySelector('.channel-header');
-
-  header.addEventListener('click', (e) => {
-    // Don't double-toggle if the checkbox itself was clicked
-    if (e.target === checkbox || e.target.closest('.channel-body')) return;
-    checkbox.checked = !checkbox.checked;
-    checkbox.dispatchEvent(new Event('change'));
-  });
-
-  checkbox.addEventListener('change', () => {
-    if (checkbox.checked) {
-      card.classList.add('enabled');
-      body.classList.add('open');
-      renderConnectionInfo(ch);
-      renderInlinePermissions(ch);
-    } else {
-      card.classList.remove('enabled');
-      body.classList.remove('open');
-    }
-  });
-
-  // Initialize — render connection + permissions for pre-checked channels
+function applyChannelState(card, ch, checkbox, body) {
   if (checkbox.checked) {
     card.classList.add('enabled');
     body.classList.add('open');
     renderConnectionInfo(ch);
     renderInlinePermissions(ch);
+  } else {
+    card.classList.remove('enabled');
+    body.classList.remove('open');
   }
+}
+
+document.querySelectorAll('.channel-card').forEach(card => {
+  const ch = card.dataset.channel;
+  const checkbox = card.querySelector(':scope > .channel-header > input[type="checkbox"]');
+  const body = card.querySelector(':scope > .channel-body');
+  const header = card.querySelector(':scope > .channel-header');
+  if (!checkbox || !body || !header) return;
+
+  // Prevent checkbox click from bubbling to header (avoids double-toggle)
+  checkbox.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  // Header click toggles the checkbox (except when clicking inside body area)
+  header.addEventListener('click', () => {
+    checkbox.checked = !checkbox.checked;
+    applyChannelState(card, ch, checkbox, body);
+  });
+
+  // Also handle programmatic / direct checkbox changes
+  checkbox.addEventListener('change', () => {
+    applyChannelState(card, ch, checkbox, body);
+  });
+
+  // Initialize — apply state for pre-checked channels (browser, terminal)
+  applyChannelState(card, ch, checkbox, body);
 });
 
 // ===== Page 1 -> Page 2 =====
