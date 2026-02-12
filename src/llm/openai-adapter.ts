@@ -5,7 +5,7 @@
 
 import type { Message, ToolDefinition, LLMAdapter, LLMActionResponse, ToolCall } from '../types.js';
 
-const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
+const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
 function messagesToOpenAI(
   messages: Message[]
@@ -54,18 +54,37 @@ function toolsToOpenAI(tools: ToolDefinition[]): unknown[] {
 }
 
 export interface OpenAIAdapterOptions {
+  /** API key. По умолчанию берётся из OPENAI_API_KEY. */
   apiKey?: string;
+  /** Модель: gpt-4o, gpt-4o-mini, o3-mini и т.д. По умолчанию gpt-4o-mini. */
   model?: string;
+  /**
+   * Base URL провайдера (без /chat/completions).
+   * Примеры:
+   *   OpenAI:      https://api.openai.com/v1         (по умолчанию)
+   *   Anthropic:   https://api.anthropic.com/v1
+   *   Google:      https://generativelanguage.googleapis.com/v1beta/openai
+   *   Groq:        https://api.groq.com/openai/v1
+   *   Together:    https://api.together.xyz/v1
+   *   Mistral:     https://api.mistral.ai/v1
+   *   DeepSeek:    https://api.deepseek.com/v1
+   *   OpenRouter:  https://openrouter.ai/api/v1
+   *   Local (Ollama): http://localhost:11434/v1
+   */
+  baseUrl?: string;
 }
 
 export class OpenAIAdapter implements LLMAdapter {
   private apiKey: string;
   private model: string;
+  private chatUrl: string;
 
   constructor(options: OpenAIAdapterOptions = {}) {
     this.apiKey = options.apiKey ?? process.env['OPENAI_API_KEY'] ?? '';
     this.model = options.model ?? 'gpt-4o-mini';
-    if (!this.apiKey) throw new Error('OpenAIAdapter: OPENAI_API_KEY required');
+    const base = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.chatUrl = `${base}/chat/completions`;
+    if (!this.apiKey) throw new Error('OpenAIAdapter: API key required (apiKey option or OPENAI_API_KEY env)');
   }
 
   async chat(messages: Message[], tools: ToolDefinition[]): Promise<LLMActionResponse> {
@@ -76,7 +95,7 @@ export class OpenAIAdapter implements LLMAdapter {
       tool_choice: tools.length ? 'auto' : undefined,
     };
 
-    const res = await fetch(OPENAI_CHAT_URL, {
+    const res = await fetch(this.chatUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

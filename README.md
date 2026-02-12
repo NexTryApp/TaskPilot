@@ -6,7 +6,33 @@
 
 ## Как устроен
 
-- **Мозг (LLM)** — OpenAI / Claude / другая модель через адаптер.
+- **Мозг (LLM)** — любая модель через единый адаптер (`OpenAIAdapter` с настраиваемым `baseUrl`):
+
+  | Провайдер | Модели | baseUrl |
+  |-----------|--------|---------|
+  | **OpenAI** | `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `o3-mini` | `https://api.openai.com/v1` (по умолчанию) |
+  | **Anthropic** | `claude-sonnet-4-20250514`, `claude-3.5-haiku` | `https://api.anthropic.com/v1` |
+  | **Google Gemini** | `gemini-2.0-flash`, `gemini-2.5-pro` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+  | **DeepSeek** | `deepseek-chat`, `deepseek-reasoner` | `https://api.deepseek.com/v1` |
+  | **Groq** | `llama-3.3-70b`, `mixtral-8x7b` | `https://api.groq.com/openai/v1` |
+  | **Together** | `meta-llama/Llama-3.3-70B`, `Qwen/Qwen2.5-72B` | `https://api.together.xyz/v1` |
+  | **Mistral** | `mistral-large`, `mistral-small` | `https://api.mistral.ai/v1` |
+  | **OpenRouter** | 200+ моделей (любой провайдер) | `https://openrouter.ai/api/v1` |
+  | **Ollama (локально)** | `llama3`, `mistral`, `qwen2.5` и др. | `http://localhost:11434/v1` |
+
+  ```ts
+  // OpenAI (по умолчанию)
+  new OpenAIAdapter({ model: 'gpt-4o' })
+
+  // DeepSeek
+  new OpenAIAdapter({ baseUrl: 'https://api.deepseek.com/v1', apiKey: '...', model: 'deepseek-chat' })
+
+  // Ollama (локально, без ключа — задать любую строку)
+  new OpenAIAdapter({ baseUrl: 'http://localhost:11434/v1', apiKey: 'ollama', model: 'llama3' })
+  ```
+
+  Любой провайдер с OpenAI-совместимым API подключается одной строкой. Для провайдеров с другим форматом — реализовать интерфейс `LLMAdapter`.
+
 - **Цикл агента** — цель → думает → выбирает действие → вызывает инструмент → получает результат → повторяет.
 - **Инструменты (Tools)** — вызов API, создание задачи, HTTP-запросы и т.д. Агент сам решает, какой инструмент вызвать.
 - **Память** — краткосрочная (буфер сообщений) и опциональная долгосрочная (поиск по контексту).
@@ -108,3 +134,11 @@ console.log(state.finalAnswer);
 - `src/budget/` — бюджет токенов.
 
 Безопасность, оплаты, фрод, юр. ответственность — не входят во фреймворк; это уровень твоей платформы и API.
+
+## Лицензия
+
+**TaskPilot Source Available License v1.0** — свободное использование (включая коммерческое) при обязательном видимом упоминании:
+
+> Powered by TaskPilot (github.com/NexTryApp/TaskPilot)
+
+Подробно: [LICENSE](./LICENSE).

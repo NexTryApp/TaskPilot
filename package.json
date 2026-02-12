@@ -16,7 +16,7 @@
     "autonomous"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@types/node": "^25.2.3",
     "tsx": "^4.7.0",
