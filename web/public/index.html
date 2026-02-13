@@ -47,8 +47,11 @@
         <div class="form-row" style="margin-top:14px">
           <div class="form-group">
             <label for="apiKey">API Key</label>
-            <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
-            <span class="hint" id="keyHint">Get key at <a href="https://platform.openai.com/api-keys" target="_blank" id="keyLink">platform.openai.com</a></span>
+            <div class="api-key-row">
+              <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+              <a href="https://platform.openai.com/api-keys" target="_blank" id="keyLink" class="btn-get-key" title="Open platform to get API key">&#x1F511; Get Key</a>
+            </div>
+            <span class="hint" id="keyHint">Opens <strong id="keyLinkLabel">platform.openai.com</strong> — sign in, create a key, paste it here</span>
           </div>
           <div class="form-group">
             <label for="model">Model</label>

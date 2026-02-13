@@ -133,6 +133,7 @@ const modelSelect = document.getElementById('model');
 const apiKeyInput = document.getElementById('apiKey');
 const keyHint = document.getElementById('keyHint');
 const keyLink = document.getElementById('keyLink');
+const keyLinkLabel = document.getElementById('keyLinkLabel');
 
 function populateModels(provider) {
   const models = MODEL_CATALOG[provider] || [];
@@ -161,12 +162,16 @@ function populateModels(provider) {
     modelSelect.parentElement.appendChild(inp);
   }
 
-  // Update key hint
+  // Update key button + hint
   const info = PROVIDER_KEY_LINKS[provider] || {};
   if (info.url) {
-    keyHint.innerHTML = `Get key at <a href="${info.url}" target="_blank">${info.label}</a>`;
+    keyLink.href = info.url;
+    keyLink.style.display = '';
+    keyLinkLabel.textContent = info.label;
+    keyHint.style.display = '';
   } else {
-    keyHint.textContent = info.label || '';
+    keyLink.style.display = 'none';
+    keyHint.innerHTML = `<em>${info.label || ''}</em>`;
   }
 }
 

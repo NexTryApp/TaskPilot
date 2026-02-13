@@ -144,6 +144,35 @@ body {
   margin-bottom: 14px;
 }
 
+/* ===== API Key Button ===== */
+.api-key-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.api-key-row input {
+  flex: 1;
+  min-width: 0;
+}
+.btn-get-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-get-key:hover { background: #2ea043; transform: translateY(-1px); }
+.btn-get-key:active { transform: translateY(0); }
+
 /* ===== Forms ===== */
 .form-group {
   display: flex;
