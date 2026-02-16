@@ -44,6 +44,47 @@ export type { ContextManagerOptions } from './context/context-manager.js';
 export { TokenTracker } from './budget/token-tracker.js';
 export type { TokenBudgetOptions } from './budget/token-tracker.js';
 
+// --- Security ---
+export {
+  ExecGuard,
+  ApprovalManager,
+  SecurityAdvisor,
+  checkCommand,
+  splitAndAnalyze,
+  isSafeBinCommand,
+  containsBlockedPath,
+  detectPlatform,
+  worstSeverity,
+} from './security/index.js';
+export type {
+  CommandSeverity,
+  CommandCheckResult,
+  CommandExplanation,
+  AdvisorContext,
+  Platform,
+  ExecDecision,
+  ExecGuardOptions,
+  ChainAnalysis,
+  ChainSegment,
+} from './security/index.js';
+
+// --- Skills ---
+export {
+  BUILTIN_SKILLS,
+  getBuiltinSkillNames,
+  getBuiltinSkill,
+  parseSkillFile,
+  loadSkillFromFile,
+  loadSkillsDirectory,
+  skillToAccessPolicy,
+  skillToSystemPromptAddition,
+} from './skills/index.js';
+export type { SkillDefinition } from './skills/index.js';
+
+// --- Database ---
+export { initDatabase, Repository } from './db/index.js';
+export type { RunRecord, RunStepRecord, SecurityEventRecord } from './db/index.js';
+
 // --- Types ---
 export type {
   AgentGoal,

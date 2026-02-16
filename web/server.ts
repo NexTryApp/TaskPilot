@@ -1,5 +1,5 @@
 /**
- * TaskPilot Web Server with SSE streaming and workspace tracking.
+ * TaskPilot Web Server with SSE streaming, security, skills, and database.
  * Run: npx tsx web/server.ts
  */
 
@@ -13,19 +13,80 @@ import {
   ToolRegistry,
   BufferMemory,
   OpenAIAdapter,
+  // Security
+  ApprovalManager,
+  SecurityAdvisor,
+  // Skills
+  BUILTIN_SKILLS,
+  getBuiltinSkill,
+  loadSkillsDirectory,
+  skillToAccessPolicy,
+  skillToSystemPromptAddition,
+  // Database
+  initDatabase,
+  Repository,
 } from '../src/index.js';
-import type { AuditEntry, AccessContext, AgentStepEvent, AgentWorkspace } from '../src/index.js';
+import type {
+  AuditEntry,
+  AccessContext,
+  AgentStepEvent,
+  AgentWorkspace,
+  SkillDefinition,
+  CommandExplanation,
+} from '../src/index.js';
 
 const execAsync = promisify(execCb);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import { randomBytes } from 'crypto';
+
 const app = express();
 const PORT = 4242;
 
+// --- Security: CORS restriction (only allow same-origin) ---
+app.use((_req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', `http://localhost:${PORT}`);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Session-Token');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  next();
+});
+
+// --- Security: Session token (generated on startup, required for API write operations) ---
+const SESSION_TOKEN = randomBytes(32).toString('hex');
+
+/** Middleware: require session token for sensitive endpoints */
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const token = String(req.headers['x-session-token'] || '');
+  if (token === SESSION_TOKEN) { next(); return; }
+  res.status(401).json({ error: 'Unauthorized — missing or invalid session token' });
+}
+
+// --- Session handshake: UI fetches token on load (same-origin protected by CORS) ---
+app.get('/api/session', (_req, res) => {
+  res.json({ token: SESSION_TOKEN });
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// --- Initialize Database ---
+const dbPath = path.join(path.dirname(__dirname), 'data', 'taskpilot.db');
+const db = initDatabase(dbPath);
+const repo = new Repository(db);
+console.log('  Database initialized:', dbPath);
+
+// --- Load skills (builtin + custom from skills/ directory) ---
+const skillsDir = path.join(path.dirname(__dirname), 'skills');
+const customSkills = loadSkillsDirectory(skillsDir);
+const allSkills = new Map<string, SkillDefinition>([...BUILTIN_SKILLS, ...customSkills]);
+console.log(`  Skills loaded: ${Array.from(allSkills.keys()).join(', ')}`);
+
+// --- Global approval manager (shared across requests for SSE communication) ---
+const globalApprovalManager = new ApprovalManager(60_000);
 
 // --- Tool definition with workspace metadata ---
 interface ToolMeta {
@@ -58,7 +119,6 @@ function getToolWorkspace(toolName: string, args: Record<string, unknown>): Agen
     icon: meta.icon,
   };
 
-  // Add specific location info based on tool + args
   switch (toolName) {
     case 'telegram_send':
     case 'telegram_read':
@@ -94,12 +154,65 @@ function getToolWorkspace(toolName: string, args: Record<string, unknown>): Agen
   return ws;
 }
 
+// --- SSRF Protection ---
+/** Block requests to internal/private networks and cloud metadata endpoints. */
+function checkSsrf(urlStr: string): string | null {
+  try {
+    const parsed = new URL(urlStr);
+
+    // Block non-http(s) schemes
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return `Blocked: only http/https URLs allowed (got ${parsed.protocol})`;
+    }
+
+    const host = parsed.hostname.toLowerCase();
+
+    // Block cloud metadata endpoints
+    if (host === '169.254.169.254' || host === 'metadata.google.internal') {
+      return 'Blocked: cloud metadata endpoint (SSRF protection)';
+    }
+
+    // Block localhost / loopback
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0') {
+      return 'Blocked: localhost/loopback address (SSRF protection)';
+    }
+
+    // Block private IP ranges (10.x, 172.16-31.x, 192.168.x)
+    const ipv4Match = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (ipv4Match) {
+      const [, a, b] = ipv4Match.map(Number);
+      if (a === 10) return 'Blocked: private network 10.0.0.0/8 (SSRF protection)';
+      if (a === 172 && b >= 16 && b <= 31) return 'Blocked: private network 172.16.0.0/12 (SSRF protection)';
+      if (a === 192 && b === 168) return 'Blocked: private network 192.168.0.0/16 (SSRF protection)';
+      if (a === 169 && b === 254) return 'Blocked: link-local 169.254.0.0/16 (SSRF protection)';
+    }
+
+    return null; // URL is safe
+  } catch {
+    return `Blocked: invalid URL "${urlStr}"`;
+  }
+}
+
+// --- Rate Limiting ---
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 10; // max 10 runs per minute
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const timestamps = rateLimitMap.get(key) || [];
+  const recent = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX) return false;
+  recent.push(now);
+  rateLimitMap.set(key, recent);
+  return true;
+}
+
 // Channel config passed from UI for real tool execution
 let terminalCwd: string | undefined;
 let terminalShell: string | undefined;
 
 function createDemoTools(enabledTools: string[], channelConfig?: Record<string, unknown>): ToolRegistry {
-  // Extract terminal config if provided
   const termCfg = channelConfig?.terminal as Record<string, string> | undefined;
   terminalCwd = termCfg?.cwd || undefined;
   const shellMap: Record<string, string> = { powershell: 'powershell.exe', cmd: 'cmd.exe', bash: 'bash' };
@@ -171,6 +284,11 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
         const url = String(args['url'] || 'https://example.com');
         const MAX_CHARS = 50_000;
         const TIMEOUT_MS = 15_000;
+
+        // --- SSRF Protection: block internal/private URLs ---
+        const ssrfError = checkSsrf(url);
+        if (ssrfError) return { url, error: ssrfError, status: 0 };
+
         try {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -181,30 +299,21 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
           clearTimeout(timer);
           const contentType = resp.headers.get('content-type') || '';
           let text = await resp.text();
-          // Strip HTML tags for readable text
           if (contentType.includes('html')) {
-            // Extract title
             const titleMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i);
             const title = titleMatch ? titleMatch[1].trim() : '';
-            // Remove script/style/nav/header/footer tags and their content
             text = text.replace(/<(script|style|nav|header|footer|aside|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '');
-            // Remove all HTML tags
             text = text.replace(/<[^>]+>/g, ' ');
-            // Collapse whitespace
             text = text.replace(/\s+/g, ' ').trim();
             return {
-              url,
-              status: resp.status,
-              title,
+              url, status: resp.status, title,
               content: text.slice(0, MAX_CHARS),
               contentLength: text.length,
               truncated: text.length > MAX_CHARS,
             };
           }
           return {
-            url,
-            status: resp.status,
-            title: '',
+            url, status: resp.status, title: '',
             content: text.slice(0, MAX_CHARS),
             contentLength: text.length,
             truncated: text.length > MAX_CHARS,
@@ -243,7 +352,6 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
           });
           clearTimeout(timer);
           const html = await resp.text();
-          // Parse DuckDuckGo HTML results
           const results: { title: string; url: string; snippet: string }[] = [];
           const resultPattern = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
           const snippetPattern = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -251,7 +359,6 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
           let match;
           while ((match = resultPattern.exec(html)) !== null && titles.length < 8) {
             let href = match[1];
-            // DuckDuckGo wraps URLs in redirects
             const udMatch = href.match(/uddg=([^&]+)/);
             if (udMatch) href = decodeURIComponent(udMatch[1]);
             const title = match[2].replace(/<[^>]+>/g, '').trim();
@@ -282,17 +389,16 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
       name: 'terminal_run',
       definition: {
         name: 'terminal_run',
-        description: 'Execute a real shell command and return stdout/stderr. Use with caution.',
+        description: 'Execute a real shell command and return stdout/stderr. Security-gated by ExecGuard.',
         parameters: {
           command: { type: 'string', description: 'Shell command to execute' },
         },
       },
       async execute(args) {
         const cmd = String(args['command'] || 'echo hello');
-        const MAX_OUTPUT = 64 * 1024; // 64KB max output
-        const TIMEOUT_MS = 30_000;    // 30 seconds timeout
+        const MAX_OUTPUT = 64 * 1024;
+        const TIMEOUT_MS = 30_000;
 
-        // If SANDBOX_URL is set (Docker mode), route to the sandbox container
         const sandboxUrl = process.env.SANDBOX_URL;
         if (sandboxUrl) {
           try {
@@ -313,16 +419,10 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
             return result;
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            return {
-              command: cmd,
-              exitCode: 1,
-              stdout: '',
-              stderr: `Sandbox error: ${message}`,
-            };
+            return { command: cmd, exitCode: 1, stdout: '', stderr: `Sandbox error: ${message}` };
           }
         }
 
-        // Local execution (non-Docker mode)
         try {
           const { stdout, stderr } = await execAsync(cmd, {
             timeout: TIMEOUT_MS,
@@ -331,17 +431,14 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
             shell: terminalShell || undefined,
           });
           return {
-            command: cmd,
-            exitCode: 0,
+            command: cmd, exitCode: 0,
             stdout: stdout.slice(0, MAX_OUTPUT),
             stderr: stderr.slice(0, MAX_OUTPUT),
           };
         } catch (err: unknown) {
           const e = err as { code?: number; killed?: boolean; stdout?: string; stderr?: string; message?: string };
           return {
-            command: cmd,
-            exitCode: e.code ?? 1,
-            killed: e.killed ?? false,
+            command: cmd, exitCode: e.code ?? 1, killed: e.killed ?? false,
             stdout: (e.stdout || '').slice(0, MAX_OUTPUT),
             stderr: (e.stderr || e.message || 'Unknown error').slice(0, MAX_OUTPUT),
           };
@@ -427,26 +524,136 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// --- API: Tool catalog ---
+// ============================================================================
+// API ENDPOINTS
+// ============================================================================
+
+// --- Tool catalog ---
 app.get('/api/tools', (_req, res) => {
   res.json(TOOL_CATALOG);
 });
 
-// --- API: Run agent with SSE ---
-app.post('/api/run', async (req, res) => {
-  const { baseUrl, apiKey, model, goal, channels, maxSteps, maxTokens, systemPrompt, agentName, accessPolicy } = req.body;
+// --- Skills catalog ---
+app.get('/api/skills', (_req, res) => {
+  const catalog = Array.from(allSkills.entries()).map(([key, skill]) => ({
+    key,
+    name: skill.name,
+    description: skill.description,
+    descriptionRu: skill.descriptionRu,
+    icon: skill.icon,
+    securityLevel: skill.securityLevel,
+    allowedTools: skill.allowedTools,
+    deniedTools: skill.deniedTools,
+  }));
+  res.json(catalog);
+});
 
-  // Derive enabled tools from channels
-  const enabledTools: string[] = [];
-  if (channels?.telegram) { enabledTools.push('telegram_send', 'telegram_read'); }
-  if (channels?.discord) { enabledTools.push('telegram_send', 'telegram_read'); } // reuse demo tools
-  if (channels?.whatsapp) { enabledTools.push('telegram_send'); }
-  if (channels?.slack) { enabledTools.push('telegram_send'); }
-  if (channels?.browser) { enabledTools.push('browser_open', 'browser_search'); }
-  if (channels?.terminal) { enabledTools.push('terminal_run'); }
-  if (channels?.email) { enabledTools.push('send_email'); }
-  // Always include create_task and get_weather as utility tools
-  enabledTools.push('create_task', 'get_weather');
+// --- Approval response ---
+app.post('/api/approval/:id', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { approved } = req.body;
+  const found = globalApprovalManager.respond(id, approved === true);
+
+  // Log security event
+  repo.addSecurityEvent(
+    'WARN',
+    approved ? 'APPROVED' : 'DENIED',
+    { userDecision: approved ? 'approved' : 'denied' }
+  );
+
+  res.json({ ok: found, approved });
+});
+
+// --- Settings ---
+app.get('/api/settings', requireAuth, (_req, res) => {
+  const settings = repo.getAllSettings();
+  // Also try to get saved API key (decrypted)
+  const apiKey = repo.getSecret('apiKey');
+  res.json({ ...settings, apiKey: apiKey || '' });
+});
+
+app.post('/api/settings', requireAuth, (req, res) => {
+  const { apiKey, ...rest } = req.body;
+  // Save API key encrypted
+  if (apiKey) {
+    repo.setSecret('apiKey', apiKey);
+  }
+  // Save other settings as plain text
+  for (const [key, value] of Object.entries(rest)) {
+    if (typeof value === 'string') {
+      repo.setSetting(key, value);
+    }
+  }
+  res.json({ ok: true });
+});
+
+// --- History ---
+app.get('/api/history', (req, res) => {
+  const limit = Math.min(Number(req.query['limit']) || 50, 200);
+  const offset = Number(req.query['offset']) || 0;
+  const runs = repo.getRuns(limit, offset);
+  res.json(runs);
+});
+
+app.get('/api/history/:runId', (req, res) => {
+  const run = repo.getRun(req.params['runId']);
+  if (!run) return res.status(404).json({ error: 'Run not found' });
+  const steps = repo.getSteps(req.params['runId']);
+  res.json({ run, steps });
+});
+
+// --- Security events ---
+app.get('/api/security-events', (req, res) => {
+  const limit = Math.min(Number(req.query['limit']) || 100, 500);
+  const events = repo.getSecurityEvents(limit);
+  res.json(events);
+});
+
+// --- Stats ---
+app.get('/api/stats', (_req, res) => {
+  res.json(repo.getStats());
+});
+
+// ============================================================================
+// MAIN: Run agent with SSE + security + skills
+// ============================================================================
+
+app.post('/api/run', requireAuth, async (req, res) => {
+  // Rate limit: max 10 agent runs per minute
+  if (!checkRateLimit('run')) {
+    return res.status(429).json({ error: 'Rate limit exceeded — max 10 runs per minute' });
+  }
+
+  const {
+    baseUrl, apiKey, model, goal,
+    channels, maxSteps, maxTokens, systemPrompt,
+    agentName,
+    // REMOVED: accessPolicy (replaced by skill-based policy)
+    skill: skillName,  // NEW: skill selection
+  } = req.body;
+
+  // Resolve skill (default: web-researcher)
+  const selectedSkillName = skillName || 'web-researcher';
+  const selectedSkill = allSkills.get(selectedSkillName) || getBuiltinSkill('web-researcher')!;
+
+  // Derive enabled tools from skill (not from channels anymore — skill controls this)
+  const enabledToolNames: string[] = [];
+  if (selectedSkill.allowedTools.includes('*')) {
+    // All tools allowed by skill — but still filter by what channels are enabled
+    if (channels?.telegram) { enabledToolNames.push('telegram_send', 'telegram_read'); }
+    if (channels?.discord) { enabledToolNames.push('telegram_send', 'telegram_read'); }
+    if (channels?.whatsapp) { enabledToolNames.push('telegram_send'); }
+    if (channels?.slack) { enabledToolNames.push('telegram_send'); }
+    if (channels?.browser) { enabledToolNames.push('browser_open', 'browser_search'); }
+    if (channels?.terminal) { enabledToolNames.push('terminal_run'); }
+    if (channels?.email) { enabledToolNames.push('send_email'); }
+    enabledToolNames.push('create_task', 'get_weather');
+  } else {
+    // Only tools allowed by skill
+    enabledToolNames.push(...selectedSkill.allowedTools);
+  }
+
+  const uniqueTools = [...new Set(enabledToolNames)];
 
   if (!apiKey || !model || !goal) {
     return res.status(400).json({ error: 'apiKey, model and goal are required' });
@@ -463,20 +670,74 @@ app.post('/api/run', async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   }
 
-  const enabledToolNames: string[] = [...new Set(enabledTools)]; // dedupe
-  const toolRegistry = createDemoTools(enabledToolNames, channels);
+  // Create tool registry
+  const toolRegistry = createDemoTools(uniqueTools, channels);
 
-  // Send permissions
+  // --- Security: Create ExecGuard with selected skill ---
+  const { policy } = skillToAccessPolicy(selectedSkill, {
+    approvalManager: globalApprovalManager,
+    onApprovalNeeded: (approval) => {
+      // Send approval request to the UI via SSE
+      sendSSE('approval_needed', {
+        id: approval.id,
+        toolName: approval.toolName,
+        args: approval.args,
+        reason: approval.decision.reason,
+        reasonRu: approval.decision.reasonRu,
+        checks: approval.decision.checks,
+        expiresAt: approval.expiresAt,
+      });
+
+      // --- Security Advisor: deep LLM analysis for WARN commands ---
+      const warnCmd = String(approval.args?.['command'] || '');
+      if (warnCmd && advisor) {
+        advisor.explain(warnCmd, advisorContext).then(explanation => {
+          sendSSE('approval_analysis', {
+            id: approval.id,
+            command: warnCmd,
+            explanation,
+          });
+        }).catch(() => { /* ignore advisor failures */ });
+      }
+
+      // Log security event
+      repo.addSecurityEvent('WARN', 'PENDING', {
+        command: warnCmd,
+        toolName: approval.toolName,
+        explanation: approval.decision.reason,
+        explanationRu: approval.decision.reasonRu,
+        category: approval.decision.checks[0]?.category,
+      });
+    },
+  });
+
+  // Apply security policy to tool registry
+  toolRegistry.setAccessPolicy(policy);
+
+  // Build system prompt with skill safety rules
+  const basePrompt = systemPrompt || 'You are a helpful autonomous agent. Use the available tools to achieve the goal. When done, give a final answer. Be concise.';
+  const skillPromptAddition = skillToSystemPromptAddition(selectedSkill);
+  const fullSystemPrompt = basePrompt + skillPromptAddition;
+
+  // Send permissions to UI
   const allTools = TOOL_CATALOG.map(t => ({
     name: t.name,
     description: t.description,
     platform: t.platform,
     platformLabel: t.platformLabel,
     icon: t.icon,
-    enabled: enabledToolNames.includes(t.name),
+    enabled: uniqueTools.includes(t.name),
+    allowed: selectedSkill.allowedTools.includes('*') || selectedSkill.allowedTools.includes(t.name),
+    denied: selectedSkill.deniedTools.includes(t.name),
   }));
   sendSSE('permissions', {
     principal: { id: agentName || 'web-user', roles: ['user'] },
+    skill: {
+      name: selectedSkill.name,
+      description: selectedSkill.description,
+      descriptionRu: selectedSkill.descriptionRu,
+      securityLevel: selectedSkill.securityLevel,
+    },
     tools: allTools,
     channels: channels || {},
     limits: { maxSteps: maxSteps || 15, maxTokens: maxTokens || 0 },
@@ -490,17 +751,25 @@ app.post('/api/run', async (req, res) => {
     model,
   });
 
+  // --- Security Advisor: LLM-powered command explanations ---
+  const advisor = new SecurityAdvisor(llm);
+  const advisorContext = { goal, skill: selectedSkillName, previousCommands: [] as string[], cwd: terminalCwd };
+
+  const runId = `web_${Date.now()}`;
+  const accessContext: AccessContext = {
+    principal: { id: agentName || 'web-user', roles: ['user'] },
+    runId,
+  };
+
+  // Save run to database
+  repo.createRun(runId, goal, selectedSkillName, accessContext.principal.id);
+
   const auditLog: AuditEntry[] = [];
   function auditHandler(entry: AuditEntry): void {
     auditLog.push(entry);
   }
 
-  const accessContext: AccessContext = {
-    principal: { id: 'web-user', roles: ['user'] },
-    runId: `web_${Date.now()}`,
-  };
-
-  // Real-time step callback with workspace enrichment
+  // Real-time step callback with workspace enrichment + DB persistence
   function onStep(event: AgentStepEvent): void {
     // Enrich tool events with workspace info
     if ((event.type === 'tool_call' || event.type === 'tool_result' || event.type === 'tool_denied') && event.tool) {
@@ -510,6 +779,51 @@ app.post('/api/run', async (req, res) => {
       }
       event.workspace = ws;
     }
+
+    // --- Security Advisor: explain terminal commands in human language ---
+    if (event.type === 'tool_call' && event.tool === 'terminal_run') {
+      const command = String(event.args?.['command'] || '');
+      if (command) {
+        advisorContext.previousCommands.push(command);
+        // Try quick (free) explanation first
+        const quick = advisor.quickExplain(command);
+        if (quick) {
+          sendSSE('command_explained', { command, explanation: quick, source: 'quick' });
+        } else {
+          // Full LLM analysis (async — don't block the agent loop)
+          advisor.explain(command, advisorContext).then(explanation => {
+            sendSSE('command_explained', { command, explanation, source: 'llm' });
+          }).catch(() => { /* ignore advisor failures */ });
+        }
+      }
+    }
+
+    // Log security blocks
+    if (event.type === 'tool_denied' && event.error?.includes('[SECURITY')) {
+      repo.addSecurityEvent('BLOCK', 'BLOCKED', {
+        runId,
+        toolName: event.tool,
+        command: String(event.args?.['command'] || ''),
+        explanation: event.error,
+      });
+    }
+
+    // Save step to database
+    try {
+      repo.addStep(
+        runId,
+        event.step,
+        event.type,
+        event.tool,
+        event.args,
+        event.result,
+        event.content,
+        event.error,
+      );
+    } catch {
+      // DB error should not break the agent loop
+    }
+
     sendSSE('step', event);
   }
 
@@ -525,10 +839,13 @@ app.post('/api/run', async (req, res) => {
         maxTokens: maxTokens || 0,
         auditHandler,
         toolCacheTtlMs: 0,
-        systemPrompt: systemPrompt || 'You are a helpful autonomous agent. Use the available tools to achieve the goal. When done, give a final answer. Be concise.',
+        systemPrompt: fullSystemPrompt,
         onStep,
       }
     );
+
+    // Update run in database
+    repo.finishRun(runId, state.currentStep, state.finalAnswer);
 
     sendSSE('done', {
       runId: state.runId,
@@ -537,22 +854,30 @@ app.post('/api/run', async (req, res) => {
       done: state.done,
       finalAnswer: state.finalAnswer,
       principalId: state.principalId,
+      skill: selectedSkillName,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('Agent error:', message);
+    repo.failRun(runId, message);
     sendSSE('error', { error: message });
   }
 
   res.end();
 });
 
+// ============================================================================
+// SERVER STARTUP
+// ============================================================================
+
 import http from 'http';
 
 const server = http.createServer(app);
 server.listen(PORT, () => {
   console.log(`\n  TaskPilot Web UI`);
-  console.log(`  http://localhost:${PORT}\n`);
+  console.log(`  http://localhost:${PORT}`);
+  console.log(`  Skills: ${Array.from(allSkills.keys()).join(', ')}`);
+  console.log(`  Database: ${dbPath}\n`);
 });
 
 server.on('error', (err: Error) => {

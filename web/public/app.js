@@ -110,6 +110,354 @@ let selectedBaseUrl = 'https://api.openai.com/v1';
 let currentPage = 1;
 let currentMaxSteps = 15;
 const workspaceState = new Map();
+let selectedSkill = 'web-researcher';
+let skillsCatalog = [];
+let currentApprovalId = null;
+let approvalTimerInterval = null;
+let sessionToken = '';
+
+// ===== Session Token: fetch once on load, include in all sensitive API calls =====
+async function fetchSessionToken() {
+  try {
+    const resp = await fetch('/api/session');
+    if (resp.ok) {
+      const data = await resp.json();
+      sessionToken = data.token || '';
+    }
+  } catch {
+    console.warn('Failed to fetch session token');
+  }
+}
+
+/** Helper: build headers with session token for authenticated requests */
+function authHeaders(extra = {}) {
+  return { 'Content-Type': 'application/json', 'X-Session-Token': sessionToken, ...extra };
+}
+
+// ===== Skills: Load + Render + Select =====
+
+const SECURITY_LEVEL_LABELS = {
+  safe:     { text: 'Safe / \u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u044b\u0439', cls: 'safe' },
+  moderate: { text: 'Moderate / \u0423\u043c\u0435\u0440\u0435\u043d\u043d\u044b\u0439', cls: 'moderate' },
+  full:     { text: 'Full Access / \u041f\u043e\u043b\u043d\u044b\u0439 \u0434\u043e\u0441\u0442\u0443\u043f', cls: 'full' },
+};
+
+async function loadSkills() {
+  try {
+    const resp = await fetch('/api/skills');
+    if (!resp.ok) return;
+    skillsCatalog = await resp.json();
+    renderSkillGrid();
+  } catch {
+    // Skills endpoint not available — show default
+    skillsCatalog = [];
+  }
+}
+
+function renderSkillGrid() {
+  const grid = document.getElementById('skillGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  skillsCatalog.forEach(skill => {
+    const card = document.createElement('div');
+    card.className = `skill-card ${skill.securityLevel}${skill.key === selectedSkill ? ' selected' : ''}`;
+    card.dataset.skill = skill.key;
+    card.innerHTML = `
+      <div class="skill-card-top">
+        <span class="skill-card-icon">${skill.icon || '\u{1F916}'}</span>
+        <span class="skill-card-name">${skill.name}</span>
+      </div>
+      <div class="skill-card-desc">${skill.descriptionRu || skill.description}</div>
+      <div class="skill-card-level ${skill.securityLevel}">${SECURITY_LEVEL_LABELS[skill.securityLevel]?.text || skill.securityLevel}</div>
+    `;
+    card.addEventListener('click', () => selectSkill(skill.key));
+    grid.appendChild(card);
+  });
+}
+
+function selectSkill(skillKey) {
+  selectedSkill = skillKey;
+  // Update card selection
+  document.querySelectorAll('.skill-card').forEach(card => {
+    card.classList.toggle('selected', card.dataset.skill === skillKey);
+  });
+  // Update security level bar
+  const skill = skillsCatalog.find(s => s.key === skillKey);
+  if (skill) {
+    const info = SECURITY_LEVEL_LABELS[skill.securityLevel] || SECURITY_LEVEL_LABELS.safe;
+    const dot = document.getElementById('securityDot');
+    const text = document.getElementById('securityLevelText');
+    if (dot) { dot.className = `security-dot ${info.cls}`; }
+    if (text) { text.textContent = info.text; }
+  }
+}
+
+// ===== Settings: Auto-load + Save =====
+
+async function loadSavedSettings() {
+  try {
+    const resp = await fetch('/api/settings', { headers: authHeaders() });
+    if (!resp.ok) return;
+    const settings = await resp.json();
+    // Restore API key
+    if (settings.apiKey) {
+      apiKeyInput.value = settings.apiKey;
+    }
+    // Restore provider
+    if (settings.provider) {
+      const btn = document.querySelector(`.provider-btn[data-provider="${settings.provider}"]`);
+      if (btn) {
+        providerBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedProvider = settings.provider;
+        selectedBaseUrl = btn.dataset.url;
+        populateModels(settings.provider);
+      }
+    }
+    // Restore model
+    if (settings.model) {
+      const opt = modelSelect.querySelector(`option[value="${settings.model}"]`);
+      if (opt) opt.selected = true;
+    }
+    // Restore skill
+    if (settings.skill) {
+      selectedSkill = settings.skill;
+    }
+  } catch {
+    // No saved settings — that's fine
+  }
+}
+
+async function saveSettings() {
+  const settings = {
+    apiKey: apiKeyInput.value.trim(),
+    provider: selectedProvider,
+    model: getSelectedModel(),
+    skill: selectedSkill,
+  };
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(settings),
+    });
+  } catch {
+    // Ignore save errors
+  }
+}
+
+// ===== Approval Modal =====
+
+function showApprovalModal(data) {
+  currentApprovalId = data.id;
+  const overlay = document.getElementById('approvalOverlay');
+  const cmdEl = document.getElementById('approvalCommand');
+  const expEl = document.getElementById('approvalExplanation');
+  const timerEl = document.getElementById('approvalTimer');
+
+  if (cmdEl) {
+    const cmd = data.args?.command || data.toolName || 'unknown';
+    cmdEl.textContent = cmd;
+  }
+  if (expEl) {
+    const reasons = [];
+    if (data.reasonRu) reasons.push(data.reasonRu);
+    if (data.reason && data.reason !== data.reasonRu) reasons.push(data.reason);
+    if (data.checks && data.checks.length > 0) {
+      data.checks.forEach(c => {
+        const desc = c.descriptionRu || c.description || c.category;
+        if (desc) reasons.push(`\u2022 ${desc}`);
+      });
+    }
+    expEl.innerHTML = reasons.join('<br>') || 'Potentially dangerous operation';
+  }
+
+  // Start countdown timer
+  let secondsLeft = 60;
+  if (data.expiresAt) {
+    secondsLeft = Math.max(1, Math.floor((new Date(data.expiresAt).getTime() - Date.now()) / 1000));
+  }
+  if (timerEl) timerEl.textContent = `${secondsLeft}s`;
+  clearInterval(approvalTimerInterval);
+  approvalTimerInterval = setInterval(() => {
+    secondsLeft--;
+    if (timerEl) timerEl.textContent = `${secondsLeft}s`;
+    if (secondsLeft <= 0) {
+      clearInterval(approvalTimerInterval);
+      hideApprovalModal();
+      addSecurityEntry('denied', '\u23f0 Timeout', data.args?.command || data.toolName || '', '\u0422\u0430\u0439\u043c\u0430\u0443\u0442 — \u0430\u0432\u0442\u043e\u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0435');
+    }
+  }, 1000);
+
+  if (overlay) overlay.style.display = 'flex';
+}
+
+function hideApprovalModal() {
+  clearInterval(approvalTimerInterval);
+  currentApprovalId = null;
+  const overlay = document.getElementById('approvalOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+async function respondApproval(approved) {
+  if (!currentApprovalId) return;
+  const id = currentApprovalId;
+  const cmdEl = document.getElementById('approvalCommand');
+  const cmd = cmdEl ? cmdEl.textContent : '';
+  hideApprovalModal();
+
+  try {
+    await fetch(`/api/approval/${id}`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ approved }),
+    });
+  } catch {
+    // Ignore network errors
+  }
+
+  addSecurityEntry(
+    approved ? 'approved' : 'denied',
+    approved ? '\u2705 Approved' : '\u274c Denied',
+    cmd,
+    approved ? '\u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u043c' : '\u0417\u0430\u043f\u0440\u0435\u0449\u0435\u043d\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u043c'
+  );
+}
+
+// Wire up approval buttons
+document.getElementById('btnApprove')?.addEventListener('click', () => respondApproval(true));
+document.getElementById('btnDeny')?.addEventListener('click', () => respondApproval(false));
+
+// ===== Security Feed =====
+
+function addSecurityEntry(type, label, command, reason) {
+  const feed = document.getElementById('securityFeed');
+  if (!feed) return;
+  const ph = feed.querySelector('.feed-placeholder');
+  if (ph) ph.remove();
+
+  const entry = document.createElement('div');
+  entry.className = `sec-entry ${type}`;
+  entry.innerHTML = `
+    <span class="se-icon">${label.split(' ')[0]}</span>
+    <div class="se-body">
+      <span class="se-cmd">${escapeHtml(command)}</span>
+      ${reason ? `<span class="se-reason">${escapeHtml(reason)}</span>` : ''}
+    </div>
+  `;
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ===== Command Explanation Display (Security Advisor) =====
+
+const RISK_ICONS = { safe: '\u2705', low: '\u{1F7E2}', medium: '\u{1F7E1}', high: '\u{1F7E0}', critical: '\u{1F534}' };
+const RISK_LABELS = { safe: '\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e', low: '\u041d\u0438\u0437\u043a\u0438\u0439', medium: '\u0423\u043c\u0435\u0440\u0435\u043d\u043d\u044b\u0439', high: '\u0412\u044b\u0441\u043e\u043a\u0438\u0439', critical: '\u041a\u0440\u0438\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439' };
+
+function showCommandExplanation(data) {
+  const { command, explanation } = data;
+  if (!explanation) return;
+
+  const riskIcon = RISK_ICONS[explanation.risk] || '\u2753';
+  const riskLabel = RISK_LABELS[explanation.risk] || explanation.risk;
+  const reversibleIcon = explanation.reversible ? '\u21A9\uFE0F' : '\u26A0\uFE0F';
+  const reversibleText = explanation.reversible ? '\u041e\u0431\u0440\u0430\u0442\u0438\u043c\u043e' : '\u041d\u0435\u043e\u0431\u0440\u0430\u0442\u0438\u043c\u043e';
+
+  // Add to security feed with explanation
+  const feed = document.getElementById('securityFeed');
+  if (!feed) return;
+  const ph = feed.querySelector('.feed-placeholder');
+  if (ph) ph.remove();
+
+  const entry = document.createElement('div');
+  entry.className = `sec-entry explained risk-${explanation.risk}`;
+  entry.innerHTML = `
+    <span class="se-icon">${riskIcon}</span>
+    <div class="se-body">
+      <span class="se-cmd">${escapeHtml(command)}</span>
+      <span class="se-explanation">${escapeHtml(explanation.whatItDoes)}</span>
+      <div class="se-meta">
+        <span class="se-risk">${riskIcon} ${riskLabel}</span>
+        <span class="se-reversible">${reversibleIcon} ${reversibleText}</span>
+        ${explanation.consequences && explanation.risk !== 'safe' ? `<span class="se-consequences">${escapeHtml(explanation.consequences)}</span>` : ''}
+        ${explanation.saferAlternative ? `<span class="se-alternative">\u{1F4A1} ${escapeHtml(explanation.saferAlternative)}</span>` : ''}
+      </div>
+    </div>
+  `;
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function updateApprovalWithAnalysis(data) {
+  // Update approval modal with deep LLM analysis
+  if (!currentApprovalId || currentApprovalId !== data.id) return;
+  const explanation = data.explanation;
+  if (!explanation) return;
+
+  const expEl = document.getElementById('approvalExplanation');
+  if (!expEl) return;
+
+  const riskIcon = RISK_ICONS[explanation.risk] || '\u2753';
+  const riskLabel = RISK_LABELS[explanation.risk] || explanation.risk;
+  const reversibleIcon = explanation.reversible ? '\u21A9\uFE0F' : '\u26A0\uFE0F';
+  const reversibleText = explanation.reversible ? '\u041e\u0431\u0440\u0430\u0442\u0438\u043c\u043e' : '\u041d\u0415\u041e\u0411\u0420\u0410\u0422\u0418\u041c\u041e';
+
+  expEl.innerHTML = `
+    <div class="advisor-analysis">
+      <div class="advisor-what">${escapeHtml(explanation.whatItDoes)}</div>
+      <div class="advisor-risk">${riskIcon} \u0420\u0438\u0441\u043a: <strong>${riskLabel}</strong> | ${reversibleIcon} ${reversibleText}</div>
+      ${explanation.consequences ? `<div class="advisor-consequences">\u26A0\uFE0F ${escapeHtml(explanation.consequences)}</div>` : ''}
+      ${explanation.saferAlternative ? `<div class="advisor-alternative">\u{1F4A1} \u0410\u043b\u044c\u0442\u0435\u0440\u043d\u0430\u0442\u0438\u0432\u0430: <code>${escapeHtml(explanation.saferAlternative)}</code></div>` : ''}
+      <div class="advisor-recommendation">${escapeHtml(explanation.recommendation)}</div>
+    </div>
+  `;
+}
+
+// ===== Theme Toggle =====
+
+function initTheme() {
+  const saved = localStorage.getItem('taskpilot-theme');
+  if (saved === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    updateThemeIcon('light');
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  if (next === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  localStorage.setItem('taskpilot-theme', next);
+  updateThemeIcon(next);
+}
+
+function updateThemeIcon(theme) {
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.innerHTML = theme === 'light' ? '\u2600' : '\u263e';
+}
+
+document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+initTheme();
+
+// ===== Init: Fetch session token, then load skills + settings =====
+fetchSessionToken().then(() => {
+  loadSkills().then(() => {
+    loadSavedSettings().then(() => {
+      // Re-render skill grid with restored selection
+      renderSkillGrid();
+    });
+  });
+});
 
 // ===== Page Navigation =====
 function goToPage(n) {
@@ -323,6 +671,9 @@ document.getElementById('btnNext1').addEventListener('click', () => {
   if (!apiKey && selectedProvider !== 'ollama') return alert('Enter API Key');
   if (!model) return alert('Select a model');
 
+  // Save settings to DB (non-blocking)
+  saveSettings();
+
   // Build access policies for enabled channels
   buildAccessPolicies();
   goToPage(2);
@@ -425,6 +776,7 @@ function collectConfig() {
     agentName: document.getElementById('agentName').value.trim() || 'TaskPilot',
     channels: collectChannelCredentials(),
     accessPolicy: collectAccessPolicy(),
+    skill: selectedSkill,
   };
 }
 
@@ -540,6 +892,11 @@ function resetDashboard() {
   thoughtsFeed.innerHTML = '<div class="feed-placeholder">Agent thoughts will appear here</div>';
   answerCard.style.display = 'none';
   summaryCard.style.display = 'none';
+  // Clear security feed
+  const secFeed = document.getElementById('securityFeed');
+  if (secFeed) secFeed.innerHTML = '<div class="feed-placeholder">Security decisions will appear here / \u0420\u0435\u0448\u0435\u043d\u0438\u044f \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 \u043f\u043e\u044f\u0432\u044f\u0442\u0441\u044f \u0437\u0434\u0435\u0441\u044c</div>';
+  // Close approval modal if open
+  hideApprovalModal();
 }
 
 // ===== Workspace rendering =====
@@ -677,7 +1034,7 @@ async function runAgent(config) {
   try {
     const response = await fetch('/api/run', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify(config),
     });
 
@@ -728,14 +1085,27 @@ function handleSSE(event, dataStr) {
   switch (event) {
     case 'permissions': renderPermissions(data); setStep(0, data.limits.maxSteps); break;
     case 'step': handleStepEvent(data); break;
+    case 'approval_needed':
+      showApprovalModal(data);
+      setStatus('running', 'Waiting for approval...');
+      addActivity({ type: 'status', timestamp: new Date().toISOString(), content: `\u26a0\ufe0f Approval needed for: ${data.args?.command || data.toolName}`, step: 0 });
+      break;
+    case 'command_explained':
+      showCommandExplanation(data);
+      break;
+    case 'approval_analysis':
+      updateApprovalWithAnalysis(data);
+      break;
     case 'done':
       setStatus('done', data.done ? 'Completed' : 'Stopped (limit)');
       markAllWorkspaceDone();
+      hideApprovalModal();
       if (data.finalAnswer) showAnswer(data.finalAnswer);
       showSummary(data);
       break;
     case 'error':
       setStatus('error', 'Error');
+      hideApprovalModal();
       addActivity({ type: 'error', timestamp: new Date().toISOString(), error: data.error, step: 0 });
       break;
   }
@@ -763,6 +1133,13 @@ function handleStepEvent(ev) {
     case 'tool_denied':
       setStatus('running', `Step ${ev.step}: Access denied`);
       addActivity(ev);
+      // Add to security feed
+      addSecurityEntry(
+        ev.error?.includes('[SECURITY') ? 'blocked' : 'warned',
+        ev.error?.includes('[SECURITY') ? '\u{1F6D1} Blocked' : '\u26a0\ufe0f Denied',
+        ev.args?.command || ev.tool || '',
+        ev.error || ''
+      );
       break;
     case 'answer':
       setStatus('running', 'Final answer...');

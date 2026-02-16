@@ -43,7 +43,7 @@ export interface AgentWorkspace {
 
 /** Real-time step event emitted during agent execution. */
 export interface AgentStepEvent {
-  type: 'thinking' | 'tool_call' | 'tool_result' | 'tool_denied' | 'answer' | 'status' | 'error';
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'tool_denied' | 'answer' | 'status' | 'error' | 'approval_needed' | 'approval_response' | 'security_block';
   step: number;
   timestamp: string;
   tool?: string;
