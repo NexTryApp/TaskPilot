@@ -294,6 +294,28 @@ TaskPilot/
 
 ---
 
+## How TaskPilot Differs from OpenClaw
+
+TaskPilot is built on the OpenClaw foundation but adds enterprise-grade security layers and a human-friendly experience.
+
+| Feature | TaskPilot | OpenClaw |
+|---------|-----------|----------|
+| **Security** | 3-tier classification (BLOCK/WARN/ALLOW) + LLM Security Advisor + SSRF filter + rate limiting | Basic safe-bins only, no LLM command analysis |
+| **Command Explanations** | Every command explained in plain language — what it does, risk level, consequences | No explanations |
+| **Approval Modal** | Modal with LLM risk analysis, 60s countdown, consequences, safer alternatives | Simple modal without analysis |
+| **Session Auth** | X-Session-Token on every request, CORS-protected | No session protection |
+| **Encryption** | AES-256-GCM with random key | AES-256-GCM with deterministic key (hostname+username) — vulnerability |
+| **SSRF Protection** | Blocks localhost, private IPs, cloud metadata endpoints | None |
+| **Rate Limiting** | 10 agent runs per minute | None |
+| **Security Audit** | `security-audit.ts` — project-wide scanner for secrets and misconfigurations | None |
+| **LLM Providers** | 15+ (OpenAI, Anthropic, Gemini, DeepSeek, xAI, Ollama, and more) | Same |
+| **UI Language** | Russian + English | English only |
+| **Codebase** | Independent code, own brand | Original |
+
+**Key difference**: TaskPilot is designed for non-technical users. Every command is explained in plain human language, dangerous actions are blocked or require approval with a full risk analysis.
+
+---
+
 ## Docs
 
 - **[AGENTS.md](./AGENTS.md)** — Agent-first development guide (Engineering Harness)
