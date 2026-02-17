@@ -50,3 +50,9 @@ export {
   type CommandExplanation,
   type AdvisorContext,
 } from './security-advisor.js';
+
+export {
+  PIIScrubber,
+  type ScrubberOptions,
+  type RedactionEvent,
+} from './pii-scrubber.js';

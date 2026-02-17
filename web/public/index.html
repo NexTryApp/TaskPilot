@@ -313,6 +313,34 @@
             <span class="hint">Always-on context (preferences, role, language)</span>
           </div>
         </div>
+        <div class="form-row" style="margin-top: 8px">
+          <div class="form-group" style="flex: 1">
+            <label for="localOnlyNotes">Private Notes (never sent to AI provider)</label>
+            <textarea id="localOnlyNotes" rows="2" placeholder="e.g.: My wallet address is 0x..., SSH key path: ~/.ssh/id_rsa"></textarea>
+            <span class="hint">Stored locally, stripped before API calls. Use for sensitive data the agent should NOT see.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Privacy -->
+      <div class="section-card">
+        <h3>Data Privacy</h3>
+        <p class="section-desc">PII Scrubber automatically removes sensitive data (API keys, tokens, credit cards, crypto addresses) from messages before they are sent to the AI provider.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="scrubEmails">
+              <span>Also scrub email addresses</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="scrubPhones">
+              <span>Also scrub phone numbers</span>
+            </label>
+          </div>
+        </div>
+        <div id="piiStats" class="pii-stats" style="display:none"></div>
       </div>
 
       <!-- Identity -->

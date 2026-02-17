@@ -49,6 +49,7 @@ export {
   ExecGuard,
   ApprovalManager,
   SecurityAdvisor,
+  PIIScrubber,
   checkCommand,
   splitAndAnalyze,
   isSafeBinCommand,
@@ -66,6 +67,8 @@ export type {
   ExecGuardOptions,
   ChainAnalysis,
   ChainSegment,
+  ScrubberOptions,
+  RedactionEvent,
 } from './security/index.js';
 
 // --- Skills ---

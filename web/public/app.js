@@ -246,6 +246,20 @@ async function loadSavedSettings() {
       const el = document.getElementById('contextUseLLM');
       if (el) el.checked = true;
     }
+    // Restore local-only notes
+    if (settings.localOnlyNotes) {
+      const el = document.getElementById('localOnlyNotes');
+      if (el) el.value = settings.localOnlyNotes;
+    }
+    // Restore PII scrubber settings
+    if (settings.scrubEmails === 'true') {
+      const el = document.getElementById('scrubEmails');
+      if (el) el.checked = true;
+    }
+    if (settings.scrubPhones === 'true') {
+      const el = document.getElementById('scrubPhones');
+      if (el) el.checked = true;
+    }
   } catch {
     // No saved settings — that's fine
   }
@@ -262,6 +276,9 @@ async function saveSettings() {
     contextMaxMessages: document.getElementById('contextMaxMessages')?.value || '30',
     contextKeepRecent: document.getElementById('contextKeepRecent')?.value || '8',
     contextUseLLM: document.getElementById('contextUseLLM')?.checked ? 'true' : 'false',
+    localOnlyNotes: (document.getElementById('localOnlyNotes')?.value || '').trim(),
+    scrubEmails: document.getElementById('scrubEmails')?.checked ? 'true' : 'false',
+    scrubPhones: document.getElementById('scrubPhones')?.checked ? 'true' : 'false',
   };
   try {
     await fetch('/api/settings', {
@@ -471,6 +488,72 @@ function showContextCompression(data) {
   `;
   feed.appendChild(entry);
   feed.scrollTop = feed.scrollHeight;
+}
+
+// ===== PII Redaction Display =====
+
+const PII_TYPE_LABELS = {
+  SSH_PRIVATE_KEY: 'SSH Private Key',
+  PGP_PRIVATE_KEY: 'PGP Private Key',
+  JWT_TOKEN: 'JWT Token',
+  AWS_ACCESS_KEY: 'AWS Key',
+  AWS_SECRET_KEY: 'AWS Secret',
+  OPENAI_API_KEY: 'OpenAI Key',
+  ANTHROPIC_API_KEY: 'Anthropic Key',
+  GITHUB_TOKEN: 'GitHub Token',
+  STRIPE_KEY: 'Stripe Key',
+  SLACK_TOKEN: 'Slack Token',
+  DISCORD_TOKEN: 'Discord Token',
+  TELEGRAM_BOT_TOKEN: 'Telegram Token',
+  BEARER_TOKEN: 'Bearer Token',
+  HEX_SECRET: 'Hex Secret',
+  CREDIT_CARD: 'Credit Card',
+  BTC_ADDRESS: 'BTC Address',
+  ETH_ADDRESS: 'ETH Address',
+  ENV_SECRET: 'ENV Variable',
+  PASSWORD: 'Password',
+  EMAIL: 'Email',
+  PHONE: 'Phone',
+  PRIVATE_IP: 'Private IP',
+};
+
+function showPIIRedaction(data) {
+  const feed = document.getElementById('securityFeed');
+  if (!feed) return;
+  const ph = feed.querySelector('.feed-placeholder');
+  if (ph) ph.remove();
+
+  const typeLabel = PII_TYPE_LABELS[data.type] || data.type;
+
+  const entry = document.createElement('div');
+  entry.className = 'sec-entry pii-redacted';
+  entry.innerHTML = `
+    <span class="se-icon">\u{1F6E1}\uFE0F</span>
+    <div class="se-body">
+      <span class="se-cmd">PII Scrubber: ${escapeHtml(typeLabel)} redacted</span>
+      <span class="se-explanation">${data.count} instance(s) removed before sending to AI provider</span>
+      ${data.preview !== '[hidden]' ? `<div class="se-meta"><span class="se-alternative">Preview: ${escapeHtml(data.preview)}</span></div>` : ''}
+    </div>
+  `;
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
+
+  // Also update PII stats panel on settings page
+  const statsEl = document.getElementById('piiStats');
+  if (statsEl) {
+    statsEl.style.display = 'block';
+    const existing = statsEl.querySelector(`[data-pii="${data.type}"]`);
+    if (existing) {
+      const countEl = existing.querySelector('.pii-count');
+      if (countEl) countEl.textContent = String(Number(countEl.textContent) + data.count);
+    } else {
+      const badge = document.createElement('span');
+      badge.className = 'pii-badge';
+      badge.dataset.pii = data.type;
+      badge.innerHTML = `\u{1F6E1}\uFE0F ${escapeHtml(typeLabel)}: <strong class="pii-count">${data.count}</strong>`;
+      statsEl.appendChild(badge);
+    }
+  }
 }
 
 // ===== Theme Toggle =====
@@ -1152,6 +1235,9 @@ function handleSSE(event, dataStr) {
       break;
     case 'context_compressed':
       showContextCompression(data);
+      break;
+    case 'pii_redacted':
+      showPIIRedaction(data);
       break;
     case 'done':
       setStatus('done', data.done ? 'Completed' : 'Stopped (limit)');

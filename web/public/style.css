@@ -952,6 +952,13 @@ select option { background: var(--surface); color: var(--text); }
 .sec-entry.context-compressed .se-cmd { color: #886ce4; font-weight: 600; }
 .sec-entry.context-compressed .se-explanation { color: var(--text-dim); font-style: italic; }
 
+/* --- PII Scrubber entries --- */
+.sec-entry.pii-redacted { background: rgba(46,160,67,0.08); border-left: 3px solid #2ea043; padding-left: 7px; }
+.sec-entry.pii-redacted .se-cmd { color: #2ea043; font-weight: 600; }
+.sec-entry.pii-redacted .se-explanation { color: var(--text-dim); }
+.pii-stats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pii-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; font-size: 0.72rem; background: rgba(46,160,67,0.1); color: #2ea043; border: 1px solid rgba(46,160,67,0.2); }
+
 .se-explanation { display: block; font-size: 0.82rem; color: var(--text); margin-top: 4px; font-style: italic; }
 .se-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 0.72rem; color: var(--text-dim); }
 .se-risk { font-weight: 600; }

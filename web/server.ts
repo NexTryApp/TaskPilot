@@ -16,6 +16,7 @@ import {
   // Security
   ApprovalManager,
   SecurityAdvisor,
+  PIIScrubber,
   // Skills
   BUILTIN_SKILLS,
   getBuiltinSkill,
@@ -34,6 +35,7 @@ import type {
   SkillDefinition,
   CommandExplanation,
   CompressionEvent,
+  RedactionEvent,
 } from '../src/index.js';
 
 const execAsync = promisify(execCb);
@@ -760,6 +762,14 @@ app.post('/api/run', requireAuth, async (req, res) => {
   if (userName) pinnedParts.push(`User's name: ${userName}`);
   if (agentName && agentName !== 'web-user') pinnedParts.push(`Agent name: ${agentName}`);
   if (userNotes) pinnedParts.push(`User notes: ${userNotes}`);
+
+  // Local-only section — sensitive data that should NEVER reach the LLM API.
+  // The PII scrubber strips everything between LOCAL-ONLY markers before sending.
+  const localOnlyNotes = repo.getSetting('localOnlyNotes') || '';
+  if (localOnlyNotes) {
+    pinnedParts.push(`\n--- LOCAL-ONLY (never send to LLM) ---\n${localOnlyNotes}\n--- END LOCAL-ONLY ---`);
+  }
+
   const pinnedContext = pinnedParts.join('\n');
 
   const contextMaxMessages = Number(repo.getSetting('contextMaxMessages')) || 30;
@@ -873,6 +883,18 @@ app.post('/api/run', requireAuth, async (req, res) => {
           useLLMSummary: contextUseLLM,
           pinnedContext,
           onCompression,
+        },
+        piiScrubber: {
+          scrubEmails: repo.getSetting('scrubEmails') === 'true',
+          scrubPhones: repo.getSetting('scrubPhones') === 'true',
+          scrubPrivateIPs: true,
+          onRedaction: (event: RedactionEvent) => {
+            sendSSE('pii_redacted', {
+              type: event.type,
+              count: event.count,
+              preview: event.preview,
+            });
+          },
         },
       }
     );

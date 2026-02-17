@@ -1,6 +1,6 @@
 /**
  * Agent loop: goal → think → action → tool → result → repeat until done.
- * Includes: access control, tool caching, audit, context window, token budget.
+ * Includes: access control, tool caching, audit, context window, token budget, PII scrubbing.
  */
 
 import type {
@@ -22,6 +22,8 @@ import type { AuditHandler } from './audit/audit-logger.js';
 import { ContextManager } from './context/context-manager.js';
 import type { ContextManagerOptions } from './context/context-manager.js';
 import { TokenTracker } from './budget/token-tracker.js';
+import { PIIScrubber } from './security/pii-scrubber.js';
+import type { ScrubberOptions } from './security/pii-scrubber.js';
 
 function generateId(): string {
   return `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -69,6 +71,8 @@ export interface AgentLoopOptions {
   contextWindow?: ContextManagerOptions;
   /** Token limit per run. 0 = unlimited. */
   maxTokens?: number;
+  /** PII scrubber options. undefined = scrubbing disabled. */
+  piiScrubber?: ScrubberOptions;
   /** Callback for real-time step events. */
   onStep?: OnStepCallback;
 }
@@ -101,6 +105,10 @@ export async function runAgentLoop(
 
   const tokenTracker = options.maxTokens
     ? new TokenTracker({ maxTokens: options.maxTokens })
+    : null;
+
+  const piiScrubber = options.piiScrubber
+    ? new PIIScrubber(options.piiScrubber)
     : null;
 
   // --- Initialization ---
@@ -154,6 +162,11 @@ export async function runAgentLoop(
     let messages = memory.getMessages();
     if (contextMgr) {
       messages = await contextMgr.trimMessages(messages, llm);
+    }
+
+    // PII scrubbing — strip sensitive data BEFORE sending to LLM API
+    if (piiScrubber) {
+      messages = piiScrubber.scrubMessages(messages);
     }
 
     const definitions = tools.getDefinitions();
