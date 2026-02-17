@@ -33,7 +33,7 @@ import type {
   AgentStepEvent,
   AgentWorkspace,
   SkillDefinition,
-  CommandExplanation,
+  // REMOVED: CommandExplanation — used implicitly via SecurityAdvisor
   CompressionEvent,
   RedactionEvent,
 } from '../src/index.js';
@@ -295,11 +295,42 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
         try {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+          // redirect: 'manual' prevents automatic redirect following (SSRF bypass via 302)
           const resp = await fetch(url, {
             signal: controller.signal,
             headers: { 'User-Agent': 'TaskPilot/1.0' },
+            redirect: 'manual',
           });
           clearTimeout(timer);
+
+          // --- SSRF: check redirect target before following ---
+          if (resp.status >= 300 && resp.status < 400) {
+            const location = resp.headers.get('location') || '';
+            const redirectError = checkSsrf(location);
+            if (redirectError) return { url, error: `Redirect blocked: ${redirectError}`, status: resp.status, redirectTo: location };
+            // Safe redirect — follow manually
+            const controller2 = new AbortController();
+            const timer2 = setTimeout(() => controller2.abort(), TIMEOUT_MS);
+            const resp2 = await fetch(location, {
+              signal: controller2.signal,
+              headers: { 'User-Agent': 'TaskPilot/1.0' },
+              redirect: 'manual',
+            });
+            clearTimeout(timer2);
+            // Use the redirected response
+            const contentType2 = resp2.headers.get('content-type') || '';
+            let text2 = await resp2.text();
+            if (contentType2.includes('html')) {
+              const titleMatch2 = text2.match(/<title[^>]*>([^<]*)<\/title>/i);
+              const title2 = titleMatch2 ? titleMatch2[1].trim() : '';
+              text2 = text2.replace(/<(script|style|nav|header|footer|aside|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '');
+              text2 = text2.replace(/<[^>]+>/g, ' ');
+              text2 = text2.replace(/\s+/g, ' ').trim();
+              return { url: location, status: resp2.status, title: title2, content: text2.slice(0, MAX_CHARS), contentLength: text2.length, truncated: text2.length > MAX_CHARS };
+            }
+            return { url: location, status: resp2.status, title: '', content: text2.slice(0, MAX_CHARS), contentLength: text2.length, truncated: text2.length > MAX_CHARS };
+          }
+
           const contentType = resp.headers.get('content-type') || '';
           let text = await resp.text();
           if (contentType.includes('html')) {
@@ -843,6 +874,35 @@ app.post('/api/run', requireAuth, async (req, res) => {
       });
     }
 
+    // --- Prompt injection detected in tool result ---
+    if (event.type === 'injection_detected') {
+      sendSSE('injection_detected', {
+        tool: event.tool,
+        detections: event.detections,
+        content: event.content,
+      });
+      const firstDetection = event.detections?.[0];
+      repo.addSecurityEvent('WARN', 'INJECTION_DETECTED', {
+        runId,
+        toolName: event.tool,
+        category: firstDetection?.category,
+        explanation: firstDetection?.reason,
+      });
+    }
+
+    // --- LLM output leak detected (canary / system prompt) ---
+    if (event.type === 'output_leak') {
+      sendSSE('output_leak', {
+        leak: event.leak,
+        content: event.content,
+      });
+      repo.addSecurityEvent('BLOCK', 'OUTPUT_LEAK', {
+        runId,
+        category: event.leak?.type,
+        explanation: event.leak?.reason,
+      });
+    }
+
     // Save step to database
     try {
       repo.addStep(
@@ -896,6 +956,24 @@ app.post('/api/run', requireAuth, async (req, res) => {
             });
           },
         },
+        // --- Input Sanitizer: detect prompt injection in external data ---
+        inputSanitizer: {
+          onDetection: (detection) => {
+            sendSSE('injection_detected', {
+              tool: 'sanitizer',
+              detections: [detection],
+              content: `Injection pattern: ${detection.category} — ${detection.reason}`,
+            });
+          },
+        },
+        // Tools whose results come from untrusted external sources
+        untrustedTools: ['telegram_read', 'browser_open', 'browser_search'],
+        // System prompt fragments to monitor for leakage
+        systemPromptFragments: [
+          'Security Skill:',
+          'Safety Rules (MUST follow)',
+          'You MUST NOT attempt to use these tools',
+        ],
       }
     );
 

@@ -50,6 +50,7 @@ export {
   ApprovalManager,
   SecurityAdvisor,
   PIIScrubber,
+  InputSanitizer,
   checkCommand,
   splitAndAnalyze,
   isSafeBinCommand,
@@ -69,6 +70,10 @@ export type {
   ChainSegment,
   ScrubberOptions,
   RedactionEvent,
+  SanitizerOptions,
+  InjectionDetection,
+  InjectionSeverity,
+  OutputLeakDetection,
 } from './security/index.js';
 
 // --- Skills ---

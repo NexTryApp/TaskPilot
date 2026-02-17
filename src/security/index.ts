@@ -56,3 +56,11 @@ export {
   type ScrubberOptions,
   type RedactionEvent,
 } from './pii-scrubber.js';
+
+export {
+  InputSanitizer,
+  type SanitizerOptions,
+  type InjectionDetection,
+  type InjectionSeverity,
+  type OutputLeakDetection,
+} from './input-sanitizer.js';

@@ -959,6 +959,20 @@ select option { background: var(--surface); color: var(--text); }
 .pii-stats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .pii-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; font-size: 0.72rem; background: rgba(46,160,67,0.1); color: #2ea043; border: 1px solid rgba(46,160,67,0.2); }
 
+/* --- Injection Detection entries --- */
+.sec-entry.injection-detected { background: rgba(220,38,38,0.08); border-left: 3px solid #dc2626; padding-left: 7px; }
+.sec-entry.injection-detected .se-cmd { color: #dc2626; font-weight: 700; }
+.sec-entry.injection-detected .se-explanation { color: var(--orange); }
+.sec-entry.injection-detected.severity-warn { background: rgba(234,179,8,0.08); border-left-color: #eab308; }
+.sec-entry.injection-detected.severity-warn .se-cmd { color: #eab308; }
+
+/* --- Output Leak Detection entries --- */
+.sec-entry.output-leak { background: rgba(168,34,34,0.12); border-left: 3px solid #a82222; padding-left: 7px; }
+.sec-entry.output-leak .se-cmd { color: #a82222; font-weight: 700; text-transform: uppercase; }
+.sec-entry.output-leak .se-explanation { color: #dc2626; }
+.sec-entry.output-leak.severity-critical { background: rgba(220,38,38,0.15); border-left-color: #dc2626; animation: pulse-red 1s ease-in-out 3; }
+@keyframes pulse-red { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+
 .se-explanation { display: block; font-size: 0.82rem; color: var(--text); margin-top: 4px; font-style: italic; }
 .se-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 0.72rem; color: var(--text-dim); }
 .se-risk { font-weight: 600; }

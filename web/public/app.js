@@ -556,6 +556,57 @@ function showPIIRedaction(data) {
   }
 }
 
+// ===== Injection Detection Display =====
+
+function showInjectionDetected(data) {
+  const feed = document.getElementById('securityFeed');
+  if (!feed) return;
+  const ph = feed.querySelector('.feed-placeholder');
+  if (ph) ph.remove();
+
+  const detections = data.detections || [];
+  const categories = detections.map(d => d.category).join(', ');
+  const severity = detections.some(d => d.severity === 'block') ? 'block' : 'warn';
+
+  const entry = document.createElement('div');
+  entry.className = `sec-entry injection-detected severity-${severity}`;
+  entry.innerHTML = `
+    <span class="se-icon">${severity === 'block' ? '\u{1F6A8}' : '\u{26A0}\uFE0F'}</span>
+    <div class="se-body">
+      <span class="se-cmd">Prompt Injection ${severity === 'block' ? 'BLOCKED' : 'WARNING'}: ${escapeHtml(data.tool || 'unknown')}</span>
+      <span class="se-explanation">${escapeHtml(categories)}</span>
+      ${detections.map(d => `<div class="se-meta"><span class="se-alternative">${escapeHtml(d.reason)} — "${escapeHtml((d.fragment || '').slice(0, 60))}"</span></div>`).join('')}
+    </div>
+  `;
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+// ===== Output Leak Detection Display =====
+
+function showOutputLeak(data) {
+  const feed = document.getElementById('securityFeed');
+  if (!feed) return;
+  const ph = feed.querySelector('.feed-placeholder');
+  if (ph) ph.remove();
+
+  const leak = data.leak || {};
+  const severityIcon = leak.severity === 'critical' ? '\u{1F6A8}' : leak.severity === 'high' ? '\u{26A0}\uFE0F' : '\u{1F50D}';
+
+  const entry = document.createElement('div');
+  entry.className = `sec-entry output-leak severity-${leak.severity || 'medium'}`;
+  entry.innerHTML = `
+    <span class="se-icon">${severityIcon}</span>
+    <div class="se-body">
+      <span class="se-cmd">OUTPUT LEAK: ${escapeHtml(leak.type || 'unknown')}</span>
+      <span class="se-explanation">${escapeHtml(leak.reason || data.content || '')}</span>
+      <div class="se-meta"><span class="se-alternative">Severity: ${escapeHtml(leak.severity || 'unknown').toUpperCase()}</span></div>
+    </div>
+  `;
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
+}
+
 // ===== Theme Toggle =====
 
 function initTheme() {
@@ -1238,6 +1289,12 @@ function handleSSE(event, dataStr) {
       break;
     case 'pii_redacted':
       showPIIRedaction(data);
+      break;
+    case 'injection_detected':
+      showInjectionDetected(data);
+      break;
+    case 'output_leak':
+      showOutputLeak(data);
       break;
     case 'done':
       setStatus('done', data.done ? 'Completed' : 'Stopped (limit)');

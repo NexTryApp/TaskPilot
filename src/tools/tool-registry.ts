@@ -33,11 +33,24 @@ export class ToolRegistry {
   }
 
   getDefinitions(): ToolDefinition[] {
-    return this.getAll().map((t) => t.definition);
+    // Filter out tools that are denied or not in allowedTools — don't show LLM tools it can't use
+    const all = this.getAll();
+    if (!this.policy) return all.map((t) => t.definition);
+
+    return all
+      .filter((t) => {
+        if (this.policy!.deniedTools?.includes(t.name)) return false;
+        const allowed = this.policy!.allowedTools;
+        if (allowed?.length) {
+          return allowed.includes('*') || allowed.includes(t.name);
+        }
+        return true;
+      })
+      .map((t) => t.definition);
   }
 
   private checkAccess(context: AccessContext | undefined, toolName: string): void {
-    if (!context) return;
+    // REMOVED: if (!context) return; — policy ALWAYS applies regardless of context
     const policy = this.policy;
     if (!policy) return;
 
