@@ -38,7 +38,7 @@ export type { ValidationResult, OutputSchema } from './validation/output-validat
 
 // --- Context window ---
 export { ContextManager } from './context/context-manager.js';
-export type { ContextManagerOptions } from './context/context-manager.js';
+export type { ContextManagerOptions, CompressionEvent, OnCompressionCallback } from './context/context-manager.js';
 
 // --- Token budget ---
 export { TokenTracker } from './budget/token-tracker.js';

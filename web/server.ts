@@ -33,6 +33,7 @@ import type {
   AgentWorkspace,
   SkillDefinition,
   CommandExplanation,
+  CompressionEvent,
 } from '../src/index.js';
 
 const execAsync = promisify(execCb);
@@ -751,6 +752,30 @@ app.post('/api/run', requireAuth, async (req, res) => {
     model,
   });
 
+  // --- Context window: progressive compression ---
+  // Build pinned context from saved settings (user name, key facts)
+  const userName = repo.getSetting('userName') || '';
+  const userNotes = repo.getSetting('userNotes') || '';
+  const pinnedParts: string[] = [];
+  if (userName) pinnedParts.push(`User's name: ${userName}`);
+  if (agentName && agentName !== 'web-user') pinnedParts.push(`Agent name: ${agentName}`);
+  if (userNotes) pinnedParts.push(`User notes: ${userNotes}`);
+  const pinnedContext = pinnedParts.join('\n');
+
+  const contextMaxMessages = Number(repo.getSetting('contextMaxMessages')) || 30;
+  const contextKeepRecent = Number(repo.getSetting('contextKeepRecent')) || 8;
+  const contextUseLLM = repo.getSetting('contextUseLLM') === 'true';
+
+  // Compression callback — emits SSE with reasoning + consequences
+  const onCompression = (event: CompressionEvent) => {
+    sendSSE('context_compressed', {
+      tier: event.tier,
+      messagesCompressed: event.messagesCompressed,
+      reasoning: event.reasoning,
+      consequences: event.consequences,
+    });
+  };
+
   // --- Security Advisor: LLM-powered command explanations ---
   const advisor = new SecurityAdvisor(llm);
   const advisorContext = { goal, skill: selectedSkillName, previousCommands: [] as string[], cwd: terminalCwd };
@@ -841,6 +866,14 @@ app.post('/api/run', requireAuth, async (req, res) => {
         toolCacheTtlMs: 0,
         systemPrompt: fullSystemPrompt,
         onStep,
+        contextWindow: {
+          maxMessages: contextMaxMessages,
+          keepRecent: contextKeepRecent,
+          keepMedium: Math.max(4, Math.floor(contextKeepRecent)),
+          useLLMSummary: contextUseLLM,
+          pinnedContext,
+          onCompression,
+        },
       }
     );
 

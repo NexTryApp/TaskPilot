@@ -224,6 +224,28 @@ async function loadSavedSettings() {
     if (settings.skill) {
       selectedSkill = settings.skill;
     }
+    // Restore user profile
+    if (settings.userName) {
+      const el = document.getElementById('userName');
+      if (el) el.value = settings.userName;
+    }
+    if (settings.userNotes) {
+      const el = document.getElementById('userNotes');
+      if (el) el.value = settings.userNotes;
+    }
+    // Restore context memory settings
+    if (settings.contextMaxMessages) {
+      const el = document.getElementById('contextMaxMessages');
+      if (el) el.value = settings.contextMaxMessages;
+    }
+    if (settings.contextKeepRecent) {
+      const el = document.getElementById('contextKeepRecent');
+      if (el) el.value = settings.contextKeepRecent;
+    }
+    if (settings.contextUseLLM === 'true') {
+      const el = document.getElementById('contextUseLLM');
+      if (el) el.checked = true;
+    }
   } catch {
     // No saved settings — that's fine
   }
@@ -235,6 +257,11 @@ async function saveSettings() {
     provider: selectedProvider,
     model: getSelectedModel(),
     skill: selectedSkill,
+    userName: (document.getElementById('userName')?.value || '').trim(),
+    userNotes: (document.getElementById('userNotes')?.value || '').trim(),
+    contextMaxMessages: document.getElementById('contextMaxMessages')?.value || '30',
+    contextKeepRecent: document.getElementById('contextKeepRecent')?.value || '8',
+    contextUseLLM: document.getElementById('contextUseLLM')?.checked ? 'true' : 'false',
   };
   try {
     await fetch('/api/settings', {
@@ -417,6 +444,33 @@ function updateApprovalWithAnalysis(data) {
       <div class="advisor-recommendation">${escapeHtml(explanation.recommendation)}</div>
     </div>
   `;
+}
+
+// ===== Context Compression Display =====
+
+function showContextCompression(data) {
+  const feed = document.getElementById('securityFeed');
+  if (!feed) return;
+  const ph = feed.querySelector('.feed-placeholder');
+  if (ph) ph.remove();
+
+  const tierLabel = data.tier === 3 ? 'Deep compression' : 'Moderate compression';
+  const tierIcon = data.tier === 3 ? '\u{1F9E0}' : '\u{1F4BE}';
+
+  const entry = document.createElement('div');
+  entry.className = 'sec-entry context-compressed';
+  entry.innerHTML = `
+    <span class="se-icon">${tierIcon}</span>
+    <div class="se-body">
+      <span class="se-cmd">${tierLabel}: ${data.messagesCompressed} messages</span>
+      <span class="se-explanation">${escapeHtml(data.reasoning)}</span>
+      <div class="se-meta">
+        <span class="se-consequences">\u26A0\uFE0F ${escapeHtml(data.consequences)}</span>
+      </div>
+    </div>
+  `;
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
 }
 
 // ===== Theme Toggle =====
@@ -1095,6 +1149,9 @@ function handleSSE(event, dataStr) {
       break;
     case 'approval_analysis':
       updateApprovalWithAnalysis(data);
+      break;
+    case 'context_compressed':
+      showContextCompression(data);
       break;
     case 'done':
       setStatus('done', data.done ? 'Completed' : 'Stopped (limit)');

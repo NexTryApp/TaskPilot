@@ -297,9 +297,27 @@
         </div>
       </div>
 
+      <!-- User Profile (pinned context — never forgotten) -->
+      <div class="section-card">
+        <h3>Your Profile</h3>
+        <p class="section-desc">This info is always remembered — even when context is compressed. The agent will never forget your name.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="userName">Your Name</label>
+            <input type="text" id="userName" placeholder="Elena, John, etc.">
+            <span class="hint">Agent will always address you by name</span>
+          </div>
+          <div class="form-group">
+            <label for="userNotes">Key Notes</label>
+            <input type="text" id="userNotes" placeholder="e.g.: I prefer Russian, I'm a designer">
+            <span class="hint">Always-on context (preferences, role, language)</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Identity -->
       <div class="section-card">
-        <h3>Identity</h3>
+        <h3>Agent Identity</h3>
         <div class="form-row">
           <div class="form-group">
             <label for="agentName">Agent Name</label>
@@ -308,6 +326,33 @@
           <div class="form-group">
             <label for="agentDesc">Description</label>
             <input type="text" id="agentDesc" value="Autonomous AI assistant" placeholder="What this agent does">
+          </div>
+        </div>
+      </div>
+
+      <!-- Context Memory -->
+      <div class="section-card">
+        <h3>Context Memory</h3>
+        <p class="section-desc">How the agent manages long conversations. Progressive compression: recent messages in full detail, older ones increasingly summarized.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="contextMaxMessages">Max Messages</label>
+            <input type="number" id="contextMaxMessages" value="30" min="10" max="200">
+            <span class="hint">Total message window before compression starts</span>
+          </div>
+          <div class="form-group">
+            <label for="contextKeepRecent">Keep Recent (full detail)</label>
+            <input type="number" id="contextKeepRecent" value="8" min="2" max="50">
+            <span class="hint">Recent messages kept at full quality</span>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top: 8px">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="contextUseLLM">
+              <span>Use LLM for smart compression</span>
+            </label>
+            <span class="hint">Better quality summaries but uses extra API calls</span>
           </div>
         </div>
       </div>

@@ -273,6 +273,9 @@ select option { background: var(--surface); color: var(--text); }
 .hint a { color: var(--accent); text-decoration: none; }
 .hint a:hover { text-decoration: underline; }
 
+.checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; color: var(--text); }
+.checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
 .req { color: var(--red); font-size: 0.75rem; }
 .opt { color: var(--text-dim); font-size: 0.7rem; font-weight: 400; }
 
@@ -943,6 +946,11 @@ select option { background: var(--surface); color: var(--text); }
 .sec-entry.explained.risk-medium { border-left-color: var(--yellow); }
 .sec-entry.explained.risk-high { border-left-color: var(--orange); }
 .sec-entry.explained.risk-critical { border-left-color: var(--red); }
+
+/* --- Context compression entries --- */
+.sec-entry.context-compressed { background: rgba(136,108,228,0.08); border-left: 3px solid #886ce4; padding-left: 7px; }
+.sec-entry.context-compressed .se-cmd { color: #886ce4; font-weight: 600; }
+.sec-entry.context-compressed .se-explanation { color: var(--text-dim); font-style: italic; }
 
 .se-explanation { display: block; font-size: 0.82rem; color: var(--text); margin-top: 4px; font-style: italic; }
 .se-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 0.72rem; color: var(--text-dim); }
