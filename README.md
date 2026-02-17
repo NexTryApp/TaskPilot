@@ -300,19 +300,26 @@ TaskPilot is built on the OpenClaw foundation but adds enterprise-grade security
 
 | Feature | TaskPilot | OpenClaw |
 |---------|-----------|----------|
-| **Security** | 3-tier classification (BLOCK/WARN/ALLOW) + LLM Security Advisor + SSRF filter + rate limiting | Basic safe-bins only, no LLM command analysis |
+| **Command Security** | 3-tier classification (BLOCK/WARN/ALLOW) + LLM Security Advisor + chain analysis | Basic safe-bins only, no LLM command analysis |
+| **Prompt Injection Defense** | InputSanitizer: regex + heuristic detection on untrusted tool results, boundary markers | None |
+| **Canary Word System** | Secret word injected in system prompt; every LLM response checked for leakage | None |
+| **PII Scrubber** | 20+ patterns auto-redacted before LLM API calls (keys, tokens, cards, crypto) | None |
+| **Outbound PII Guard** | Tool arguments scrubbed before send_email/telegram_send — LLM can't leak secrets | None |
+| **SSRF Protection** | Blocks localhost, private IPs, cloud metadata + redirect bypass protection | None |
+| **Output Leak Detection** | Canary word + system prompt fragment monitoring in every LLM response | None |
 | **Command Explanations** | Every command explained in plain language — what it does, risk level, consequences | No explanations |
 | **Approval Modal** | Modal with LLM risk analysis, 60s countdown, consequences, safer alternatives | Simple modal without analysis |
+| **Context Compression** | 3-tier progressive compression + pinned context (user name never forgotten) | Simple truncation, forgets user after ~2 weeks |
 | **Session Auth** | X-Session-Token on every request, CORS-protected | No session protection |
 | **Encryption** | AES-256-GCM with random key | AES-256-GCM with deterministic key (hostname+username) — vulnerability |
-| **SSRF Protection** | Blocks localhost, private IPs, cloud metadata endpoints | None |
 | **Rate Limiting** | 10 agent runs per minute | None |
 | **Security Audit** | `security-audit.ts` — project-wide scanner for secrets and misconfigurations | None |
+| **Tool Filtering** | LLM only sees tools it can actually use (filtered by skill policy) | All tools visible regardless |
 | **LLM Providers** | 15+ (OpenAI, Anthropic, Gemini, DeepSeek, xAI, Ollama, and more) | Same |
-| **UI Language** | Russian + English | English only |
+| **License** | Source Available + CLA + Patent Grant | MIT |
 | **Codebase** | Independent code, own brand | Original |
 
-**Key difference**: TaskPilot is designed for non-technical users. Every command is explained in plain human language, dangerous actions are blocked or require approval with a full risk analysis.
+**Key difference**: TaskPilot is designed for non-technical users. Every command is explained in plain human language. Data never leaves your machine unprotected — PII scrubber strips secrets before API calls, prompt injection is detected and blocked, and output is monitored for leaks.
 
 ---
 
@@ -332,4 +339,4 @@ TaskPilot is built on the OpenClaw foundation but adds enterprise-grade security
 
 > Powered by TaskPilot (github.com/NexTryApp/TaskPilot)
 
-Details: [LICENSE](./LICENSE).
+Includes CLA (contributions licensed under same terms) and Patent Grant. Details: [LICENSE](./LICENSE).
