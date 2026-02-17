@@ -116,7 +116,7 @@ let currentApprovalId = null;
 let approvalTimerInterval = null;
 let sessionToken = '';
 
-// ===== Session Token: fetch once on load, include in all sensitive API calls =====
+// ===== Session Token: fetch on load + auto-refresh every 25 min (server rotates at 30 min) =====
 async function fetchSessionToken() {
   try {
     const resp = await fetch('/api/session');
@@ -128,6 +128,8 @@ async function fetchSessionToken() {
     console.warn('Failed to fetch session token');
   }
 }
+// Auto-refresh token before server rotation (30 min TTL, refresh at 25 min)
+setInterval(fetchSessionToken, 25 * 60 * 1000);
 
 /** Helper: build headers with session token for authenticated requests */
 function authHeaders(extra = {}) {

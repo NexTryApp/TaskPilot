@@ -8,28 +8,46 @@ subject to the following conditions:
 
 1. PERMITTED USE
    You may use, copy, modify, and distribute the Software for any purpose
-   (including commercial use) provided that you comply with the conditions
-   set forth below.
+   (including commercial use) provided that you comply with ALL conditions
+   set forth below. Commercial use WITHOUT visible attribution and an
+   active hyperlink as described in Section 2 is STRICTLY PROHIBITED.
 
-2. REQUIRED ATTRIBUTION
-   For any public use of the Software (website, web application, API, SaaS,
-   mobile application, printed materials, presentations, etc.), you MUST
-   display a visible attribution:
+2. REQUIRED ATTRIBUTION (MANDATORY FOR ALL USE)
+   For ANY use of the Software — personal, educational, or commercial —
+   including but not limited to: websites, web applications, APIs, SaaS
+   products, mobile applications, desktop applications, printed materials,
+   presentations, videos, and social media — you MUST display a clearly
+   visible attribution:
 
-       "Powered by TaskPilot (github.com/NexTryApp/TaskPilot)"
+       "Powered by TaskPilot"
 
-   or an equivalent link to the repository.
+   with an active clickable hyperlink to:
 
-   The attribution must be:
-   - placed in a visible location (site footer, "About" page, "Credits"
-     section, project README, or equivalent);
-   - accessible to end users without additional actions;
-   - in the case of web, include an active hyperlink.
+       https://github.com/NexTryApp/TaskPilot
+
+   The attribution MUST be:
+   - placed in a VISIBLE location that end users can see without scrolling
+     or navigating (site footer, application header, "About" page, or
+     equivalent prominent position);
+   - legible (minimum readable font size, sufficient contrast);
+   - accessible to end users without additional actions (no hidden menus,
+     no developer consoles, no source code comments);
+   - in the case of web applications and websites, include an ACTIVE
+     HYPERLINK (not plain text);
+   - in the case of mobile/desktop applications, include the full URL
+     as tappable/clickable link.
+
+   COMMERCIAL USE WITHOUT ATTRIBUTION IS PROHIBITED. Failure to include
+   the required visible attribution automatically revokes your right to
+   use the Software for any commercial purpose.
 
 3. NO REMOVAL OF ATTRIBUTION
-   You may not remove, hide, or make unreadable the TaskPilot attribution
-   and link to the repository from any derivative works, forks, or
-   distributions.
+   You may not remove, hide, obscure, minimize, or make unreadable the
+   TaskPilot attribution and link to the repository from any derivative
+   works, forks, distributions, or deployments. Any attempt to circumvent
+   the attribution requirement (including but not limited to: CSS hiding,
+   zero-size fonts, off-screen placement, JavaScript removal, or display:none)
+   is a violation of this license.
 
 4. DISCLAIMER OF WARRANTIES
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,

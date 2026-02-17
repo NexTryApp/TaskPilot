@@ -58,19 +58,32 @@ app.use((_req, res, next) => {
   next();
 });
 
-// --- Security: Session token (generated on startup, required for API write operations) ---
-const SESSION_TOKEN = randomBytes(32).toString('hex');
+// --- Security: Session token with rotation ---
+const SESSION_TOKEN_TTL_MS = 30 * 60_000; // 30 minutes
+let sessionToken = randomBytes(32).toString('hex');
+let sessionTokenCreatedAt = Date.now();
+
+function getSessionToken(): string {
+  const now = Date.now();
+  if (now - sessionTokenCreatedAt > SESSION_TOKEN_TTL_MS) {
+    // Rotate token every 30 minutes
+    sessionToken = randomBytes(32).toString('hex');
+    sessionTokenCreatedAt = now;
+    console.log('  Session token rotated');
+  }
+  return sessionToken;
+}
 
 /** Middleware: require session token for sensitive endpoints */
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
   const token = String(req.headers['x-session-token'] || '');
-  if (token === SESSION_TOKEN) { next(); return; }
+  if (token === getSessionToken()) { next(); return; }
   res.status(401).json({ error: 'Unauthorized — missing or invalid session token' });
 }
 
 // --- Session handshake: UI fetches token on load (same-origin protected by CORS) ---
 app.get('/api/session', (_req, res) => {
-  res.json({ token: SESSION_TOKEN });
+  res.json({ token: getSessionToken() });
 });
 
 app.use(express.json());
@@ -196,10 +209,17 @@ function checkSsrf(urlStr: string): string | null {
   }
 }
 
-// --- Rate Limiting ---
+// --- Rate Limiting (per-IP) ---
 const rateLimitMap = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 10; // max 10 runs per minute
+const RATE_LIMIT_MAX = 10; // max 10 runs per minute per IP
+
+function getClientIP(req: express.Request): string {
+  // Trust X-Forwarded-For only behind a reverse proxy
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return req.socket.remoteAddress || 'unknown';
+}
 
 function checkRateLimit(key: string): boolean {
   const now = Date.now();
@@ -210,6 +230,16 @@ function checkRateLimit(key: string): boolean {
   rateLimitMap.set(key, recent);
   return true;
 }
+
+// Cleanup stale rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamps] of rateLimitMap) {
+    const active = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+    if (active.length === 0) rateLimitMap.delete(key);
+    else rateLimitMap.set(key, active);
+  }
+}, 5 * 60_000);
 
 // Channel config passed from UI for real tool execution
 let terminalCwd: string | undefined;
@@ -654,7 +684,7 @@ app.get('/api/stats', (_req, res) => {
 
 app.post('/api/run', requireAuth, async (req, res) => {
   // Rate limit: max 10 agent runs per minute
-  if (!checkRateLimit('run')) {
+  if (!checkRateLimit(getClientIP(req))) {
     return res.status(429).json({ error: 'Rate limit exceeded — max 10 runs per minute' });
   }
 
