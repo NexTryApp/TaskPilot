@@ -181,13 +181,21 @@ TaskPilot's core differentiator is the multi-layered security system that preven
 
 ### What Gets Blocked
 
-- **Filesystem destruction**: `rm -rf`, `del /s /q`, `format`, `dd`, `shred`
-- **System modification**: `shutdown`, `reboot`, `halt`, `reg delete`
-- **Privilege escalation**: `sudo su`, `chmod 777`, `runas`
-- **Network attacks**: `nmap`, `netcat`, `iptables -F`
-- **Crypto/malware**: Mining software, ransomware patterns
-- **Data exfiltration**: curl/wget targeting `.ssh`, `.env`, `/etc/passwd`
-- **Obfuscation**: `base64 -d | bash`, `eval $(...)`, encoded PowerShell
+| Category | Commands | Level |
+|----------|----------|-------|
+| **Filesystem destruction** | `rm -rf`, `del /s /q`, `format C:`, `dd if=/dev/zero`, `shred`, `mkfs`, `wipefs`, `diskpart`, `truncate`, `Remove-Item -Recurse` | BLOCK |
+| **Embedded destructive** | `find -exec rm`, `find -execdir shred`, `xargs rm`, `xargs rm -rf` | BLOCK |
+| **System modification** | `shutdown`, `reboot`, `halt`, `poweroff`, `init 0/6`, `reg delete`, `bcdedit`, `kill 1`, `taskkill csrss/lsass` | BLOCK |
+| **Privilege escalation** | `sudo su`, `sudo bash`, `chmod 777`, `chmod +s`, `runas /administrator`, `Set-ExecutionPolicy Bypass`, `docker run --privileged` | BLOCK |
+| **Network attacks** | `nmap`, `netcat -l`, `iptables -F`, `ufw disable`, `netsh firewall off` | BLOCK |
+| **Crypto/malware** | `xmrig`, `coinhive`, `stratum+tcp`, ransomware patterns | BLOCK |
+| **Data exfiltration** | `curl/wget` + `.ssh`, `.env`, `/etc/passwd`, `.pem`, `.key`; `cat ~/.ssh/id_rsa`; `certutil -urlcache` | BLOCK |
+| **Obfuscation** | `base64 \| bash`, `eval $(...)`, `curl \| sudo bash`, `powershell -EncodedCommand`, `python -c "exec"`, `wmic process call create` | BLOCK |
+| **find -delete** | `find . -delete` | WARN |
+| **Embedded file ops** | `find -exec mv/cp/chmod/chown` | WARN |
+| **Package install** | `npm install`, `pip install`, `apt install`, `brew install`, `choco install` | WARN |
+| **File modification** | `mv`, `chmod`, `chown`, `> /path`, `rsync --delete`, `scp` | WARN |
+| **Env files** | `cat .env` | WARN |
 
 ### Approval Workflow
 
