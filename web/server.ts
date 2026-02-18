@@ -1379,6 +1379,181 @@ app.post('/api/run', requireAuth, async (req, res) => {
 });
 
 // ============================================================================
+// TELEGRAM AUTO-RESPONDER (background polling)
+// ============================================================================
+
+let tgPollingActive = false;
+let tgPollingTimer: ReturnType<typeof setTimeout> | null = null;
+let tgLastUpdateId = 0;
+
+/**
+ * Start Telegram polling loop.
+ * Checks for new messages every 3 seconds, runs agent for each, sends reply.
+ */
+function startTelegramPolling(): void {
+  // Load saved settings from DB
+  const savedSettings = repo.getAllSettings();
+  const channelsRaw = savedSettings['channels'];
+  let channels: Record<string, unknown> | null = null;
+  try { channels = channelsRaw ? JSON.parse(channelsRaw) : null; } catch { channels = null; }
+
+  const tgConfig = channels?.telegram as Record<string, string> | undefined;
+  const botToken = tgConfig?.botToken || '';
+  if (!botToken) {
+    if (tgPollingActive) {
+      console.log('  [TG] Telegram bot token not configured — polling stopped');
+      tgPollingActive = false;
+    }
+    return;
+  }
+
+  const apiKey = repo.getSecret('apiKey') || '';
+  const model = savedSettings['model'] || '';
+  const baseUrl = savedSettings['baseUrl'] || 'https://api.openai.com/v1';
+  const skillName = savedSettings['tgSkill'] || savedSettings['skill'] || 'web-researcher';
+  const selectedSkill = allSkills.get(skillName) || getBuiltinSkill('web-researcher')!;
+
+  if (!apiKey || !model) {
+    if (tgPollingActive) {
+      console.log('  [TG] API key or model not configured — polling paused');
+    }
+    return;
+  }
+
+  const TG_API = `https://api.telegram.org/bot${botToken}`;
+  tgPollingActive = true;
+
+  async function poll(): Promise<void> {
+    if (!tgPollingActive) return;
+    try {
+      const params = new URLSearchParams({
+        timeout: '5',
+        allowed_updates: JSON.stringify(['message']),
+      });
+      if (tgLastUpdateId > 0) params.set('offset', String(tgLastUpdateId + 1));
+
+      const resp = await fetch(`${TG_API}/getUpdates?${params}`);
+      const data = await resp.json() as {
+        ok?: boolean;
+        result?: Array<{
+          update_id: number;
+          message?: { message_id: number; chat: { id: number; first_name?: string }; text?: string; date: number };
+        }>;
+      };
+
+      if (!data.ok || !data.result) {
+        tgPollingTimer = setTimeout(poll, 5000);
+        return;
+      }
+
+      for (const update of data.result) {
+        tgLastUpdateId = update.update_id;
+        const msg = update.message;
+        if (!msg?.text) continue;
+
+        const chatId = msg.chat.id;
+        const userText = msg.text;
+        const userName = msg.chat.first_name || 'User';
+
+        console.log(`  [TG] Message from ${userName}: ${userText.slice(0, 80)}`);
+
+        // Run agent with the message as goal
+        try {
+          // Determine tools for this skill
+          const enabledToolNames: string[] = [];
+          if (selectedSkill.allowedTools.includes('*')) {
+            enabledToolNames.push('telegram_send', 'telegram_read', 'browser_open', 'browser_search', 'create_task', 'get_weather');
+          } else {
+            enabledToolNames.push(...selectedSkill.allowedTools);
+          }
+
+          const toolRegistry = createDemoTools(enabledToolNames, channels || undefined);
+          const { policy } = skillToAccessPolicy(selectedSkill);
+          toolRegistry.setAccessPolicy(policy);
+
+          const memory = new BufferMemory();
+          const llm = new OpenAIAdapter({
+            model,
+            baseUrl: baseUrl.replace(/\/+$/, ''),
+            apiKey,
+          });
+
+          const goalText = `User "${userName}" sent a Telegram message: "${userText}". Respond helpfully and concisely. Do NOT use telegram_send — your final answer will be sent automatically.`;
+          const runId = `tg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+          repo.createRun(runId, goalText, skillName);
+
+          const state = await runAgentLoop(
+            { goal: goalText, runId },
+            memory, toolRegistry, llm, null,
+            {
+              maxSteps: 8,
+              systemPrompt: 'You are a helpful AI assistant responding to Telegram messages. Be concise. Answer in the same language the user writes in.',
+            }
+          );
+
+          const reply = state.finalAnswer || 'Sorry, I could not process your request.';
+
+          // Send reply
+          await fetch(`${TG_API}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: reply,
+              parse_mode: 'Markdown',
+            }),
+          });
+
+          console.log(`  [TG] Reply sent to ${userName}`);
+          repo.finishRun(runId, state.currentStep, reply);
+        } catch (err) {
+          console.error(`  [TG] Agent error:`, err instanceof Error ? err.message : err);
+          // Send error reply
+          await fetch(`${TG_API}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: 'Sorry, an error occurred while processing your message.',
+            }),
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error('  [TG] Polling error:', err instanceof Error ? err.message : err);
+    }
+
+    tgPollingTimer = setTimeout(poll, 3000);
+  }
+
+  console.log(`  [TG] Telegram polling started (skill: ${skillName}, model: ${model})`);
+  poll();
+}
+
+function stopTelegramPolling(): void {
+  tgPollingActive = false;
+  if (tgPollingTimer) { clearTimeout(tgPollingTimer); tgPollingTimer = null; }
+  console.log('  [TG] Telegram polling stopped');
+}
+
+// --- API: start/stop Telegram polling ---
+app.post('/api/telegram/start', requireAuth, (_req, res) => {
+  if (tgPollingActive) return res.json({ ok: true, status: 'already_running' });
+  startTelegramPolling();
+  res.json({ ok: true, status: tgPollingActive ? 'started' : 'missing_config' });
+});
+
+app.post('/api/telegram/stop', requireAuth, (_req, res) => {
+  stopTelegramPolling();
+  res.json({ ok: true, status: 'stopped' });
+});
+
+app.get('/api/telegram/status', requireAuth, (_req, res) => {
+  res.json({ active: tgPollingActive, lastUpdateId: tgLastUpdateId });
+});
+
+// ============================================================================
 // SERVER STARTUP
 // ============================================================================
 
@@ -1389,7 +1564,12 @@ server.listen(PORT, () => {
   console.log(`\n  TaskPilot Web UI`);
   console.log(`  http://localhost:${PORT}`);
   console.log(`  Skills: ${Array.from(allSkills.keys()).join(', ')}`);
-  console.log(`  Database: ${dbPath}\n`);
+  console.log(`  Database: ${dbPath}`);
+
+  // Auto-start Telegram polling if configured
+  try { startTelegramPolling(); } catch (e) { console.log('  [TG] Auto-start skipped:', e); }
+
+  console.log('');
 });
 
 server.on('error', (err: Error) => {
