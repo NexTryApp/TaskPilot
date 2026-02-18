@@ -1394,9 +1394,10 @@ let tgLastUpdateId = 0;
 /**
  * Start Telegram polling loop.
  * Checks for new messages every 3 seconds, runs agent for each, sends reply.
+ * Settings are reloaded from DB on each poll cycle so UI changes take effect immediately.
  */
 function startTelegramPolling(): void {
-  // Load saved settings from DB
+  // Initial config check — log clearly what's missing
   const savedSettings = repo.getAllSettings();
   const channelsRaw = savedSettings['channels'];
   let channels: Record<string, unknown> | null = null;
@@ -1405,41 +1406,73 @@ function startTelegramPolling(): void {
   const tgConfig = channels?.telegram as Record<string, string> | undefined;
   const botToken = tgConfig?.botToken || '';
   if (!botToken) {
-    if (tgPollingActive) {
-      console.log('  [TG] Telegram bot token not configured — polling stopped');
-      tgPollingActive = false;
-    }
+    console.log('  [TG] ⚠ Bot token not configured — go to Settings → Telegram and enter your bot token');
+    tgPollingActive = false;
     return;
   }
 
   const apiKey = repo.getSecret('apiKey') || '';
   const model = savedSettings['model'] || '';
-  const baseUrl = savedSettings['baseUrl'] || 'https://api.openai.com/v1';
-  const skillName = savedSettings['tgSkill'] || savedSettings['skill'] || 'web-researcher';
-  const selectedSkill = allSkills.get(skillName) || getBuiltinSkill('web-researcher')!;
-
-  if (!apiKey || !model) {
-    if (tgPollingActive) {
-      console.log('  [TG] API key or model not configured — polling paused');
-    }
+  if (!apiKey) {
+    console.log('  [TG] ⚠ API key not configured — go to Settings and enter your LLM API key');
+    tgPollingActive = false;
+    return;
+  }
+  if (!model) {
+    console.log('  [TG] ⚠ Model not selected — go to Settings and choose a model');
+    tgPollingActive = false;
     return;
   }
 
-  const TG_API = `https://api.telegram.org/bot${botToken}`;
   tgPollingActive = true;
 
   async function poll(): Promise<void> {
     if (!tgPollingActive) return;
-    try {
-      const params = new URLSearchParams({
-        timeout: '5',
-        allowed_updates: JSON.stringify(['message']),
-      });
-      if (tgLastUpdateId > 0) params.set('offset', String(tgLastUpdateId + 1));
 
-      const resp = await fetch(`${TG_API}/getUpdates?${params}`);
+    // Reload settings from DB on each cycle (so UI changes take effect)
+    const settings = repo.getAllSettings();
+    const chRaw = settings['channels'];
+    let ch: Record<string, unknown> | null = null;
+    try { ch = chRaw ? JSON.parse(chRaw) : null; } catch { ch = null; }
+
+    const tgCfg = ch?.telegram as Record<string, string> | undefined;
+    const token = tgCfg?.botToken || '';
+    if (!token) {
+      console.log('  [TG] Bot token removed from settings — stopping polling');
+      tgPollingActive = false;
+      return;
+    }
+
+    const key = repo.getSecret('apiKey') || '';
+    const mdl = settings['model'] || '';
+    const bUrl = settings['baseUrl'] || 'https://api.openai.com/v1';
+    const skName = settings['tgSkill'] || settings['skill'] || 'web-researcher';
+    const skill = allSkills.get(skName) || getBuiltinSkill('web-researcher')!;
+
+    if (!key || !mdl) {
+      console.log('  [TG] API key or model removed — pausing polling');
+      tgPollingTimer = setTimeout(poll, 10000);
+      return;
+    }
+
+    const TG_API = `https://api.telegram.org/bot${token}`;
+
+    try {
+      // Use POST with JSON body — cleaner than URL params for arrays
+      const getUpdatesBody: Record<string, unknown> = {
+        timeout: 5,
+        allowed_updates: ['message'],
+      };
+      if (tgLastUpdateId > 0) getUpdatesBody.offset = tgLastUpdateId + 1;
+
+      const resp = await fetch(`${TG_API}/getUpdates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(getUpdatesBody),
+      });
       const data = await resp.json() as {
         ok?: boolean;
+        description?: string;
         result?: Array<{
           update_id: number;
           message?: { message_id: number; chat: { id: number; first_name?: string }; text?: string; date: number };
@@ -1447,6 +1480,7 @@ function startTelegramPolling(): void {
       };
 
       if (!data.ok || !data.result) {
+        console.error(`  [TG] getUpdates failed: ${data.description || 'unknown error'}`);
         tgPollingTimer = setTimeout(poll, 5000);
         return;
       }
@@ -1464,29 +1498,28 @@ function startTelegramPolling(): void {
 
         // Run agent with the message as goal
         try {
-          // Determine tools for this skill
           const enabledToolNames: string[] = [];
-          if (selectedSkill.allowedTools.includes('*')) {
+          if (skill.allowedTools.includes('*')) {
             enabledToolNames.push('telegram_send', 'telegram_read', 'browser_open', 'browser_search', 'create_task', 'get_weather');
           } else {
-            enabledToolNames.push(...selectedSkill.allowedTools);
+            enabledToolNames.push(...skill.allowedTools);
           }
 
-          const toolRegistry = createDemoTools(enabledToolNames, channels || undefined);
-          const { policy } = skillToAccessPolicy(selectedSkill);
+          const toolRegistry = createDemoTools(enabledToolNames, ch || undefined);
+          const { policy } = skillToAccessPolicy(skill);
           toolRegistry.setAccessPolicy(policy);
 
           const memory = new BufferMemory();
           const llm = new OpenAIAdapter({
-            model,
-            baseUrl: baseUrl.replace(/\/+$/, ''),
-            apiKey,
+            model: mdl,
+            baseUrl: bUrl.replace(/\/+$/, ''),
+            apiKey: key,
           });
 
           const goalText = `User "${userName}" sent a Telegram message: "${userText}". Respond helpfully and concisely. Do NOT use telegram_send — your final answer will be sent automatically.`;
           const runId = `tg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-          repo.createRun(runId, goalText, skillName);
+          repo.createRun(runId, goalText, skName);
 
           const state = await runAgentLoop(
             { goal: goalText, runId },
@@ -1499,8 +1532,8 @@ function startTelegramPolling(): void {
 
           const reply = state.finalAnswer || 'Sorry, I could not process your request.';
 
-          // Send reply
-          await fetch(`${TG_API}/sendMessage`, {
+          // Send reply — validate response
+          const sendResp = await fetch(`${TG_API}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1510,10 +1543,21 @@ function startTelegramPolling(): void {
             }),
           });
 
-          console.log(`  [TG] Reply sent to ${userName}`);
+          if (!sendResp.ok) {
+            const sendErr = await sendResp.json().catch(() => ({})) as Record<string, unknown>;
+            console.error(`  [TG] sendMessage failed: ${sendErr?.description || sendResp.statusText}`);
+            // Retry without Markdown parse_mode (some chars break it)
+            await fetch(`${TG_API}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: reply }),
+            }).catch(() => {});
+          }
+
+          console.log(`  [TG] Reply sent to ${userName} (${reply.length} chars)`);
           repo.finishRun(runId, state.currentStep, reply);
         } catch (err) {
-          console.error(`  [TG] Agent error:`, err instanceof Error ? err.message : err);
+          console.error(`  [TG] Agent error for "${userText.slice(0, 40)}":`, err instanceof Error ? err.message : err);
           // Send error reply
           await fetch(`${TG_API}/sendMessage`, {
             method: 'POST',
@@ -1532,8 +1576,25 @@ function startTelegramPolling(): void {
     tgPollingTimer = setTimeout(poll, 3000);
   }
 
-  console.log(`  [TG] Telegram polling started (skill: ${skillName}, model: ${model})`);
-  poll();
+  // Verify bot token with getMe before starting
+  const TG_API_INIT = `https://api.telegram.org/bot${botToken}`;
+  fetch(`${TG_API_INIT}/getMe`)
+    .then(r => r.json())
+    .then((me: Record<string, unknown>) => {
+      if ((me as { ok?: boolean }).ok) {
+        const bot = (me as { result?: { username?: string } }).result;
+        console.log(`  [TG] ✓ Bot verified: @${bot?.username || 'unknown'}`);
+        console.log(`  [TG] Polling started (skill: ${savedSettings['tgSkill'] || savedSettings['skill'] || 'web-researcher'}, model: ${model})`);
+        poll();
+      } else {
+        console.error(`  [TG] ✗ Bot token invalid — getMe failed: ${JSON.stringify(me)}`);
+        tgPollingActive = false;
+      }
+    })
+    .catch(err => {
+      console.error(`  [TG] ✗ Cannot reach Telegram API:`, err instanceof Error ? err.message : err);
+      tgPollingActive = false;
+    });
 }
 
 function stopTelegramPolling(): void {
@@ -1576,17 +1637,18 @@ function startDiscordPolling(): void {
   const botToken = dcConfig?.botToken || '';
   const channelId = dcConfig?.channelId || '';
   if (!botToken || !channelId) {
-    if (dcPollingActive) { console.log('  [DC] Discord not configured — polling stopped'); dcPollingActive = false; }
+    console.log('  [DC] ⚠ Discord bot token or channel ID not configured');
+    dcPollingActive = false;
     return;
   }
 
   const apiKey = repo.getSecret('apiKey') || '';
   const model = savedSettings['model'] || '';
-  const baseUrl = savedSettings['baseUrl'] || 'https://api.openai.com/v1';
-  const skillName = savedSettings['dcSkill'] || savedSettings['skill'] || 'web-researcher';
-  const selectedSkill = allSkills.get(skillName) || getBuiltinSkill('web-researcher')!;
-
-  if (!apiKey || !model) { return; }
+  if (!apiKey || !model) {
+    console.log('  [DC] ⚠ API key or model not configured');
+    dcPollingActive = false;
+    return;
+  }
 
   const DC_API = 'https://discord.com/api/v10';
   dcPollingActive = true;
@@ -1595,18 +1657,44 @@ function startDiscordPolling(): void {
   let botUserId = '';
   fetch(`${DC_API}/users/@me`, { headers: { Authorization: `Bot ${botToken}` } })
     .then(r => r.json())
-    .then((data: { id?: string }) => { botUserId = data.id || ''; })
-    .catch(() => {});
+    .then((data: { id?: string; username?: string }) => {
+      botUserId = data.id || '';
+      console.log(`  [DC] ✓ Bot verified: ${data.username || 'unknown'}`);
+    })
+    .catch(err => { console.error('  [DC] ✗ Cannot verify bot:', err instanceof Error ? err.message : err); });
 
   async function poll(): Promise<void> {
     if (!dcPollingActive) return;
+
+    // Reload settings from DB on each cycle
+    const settings = repo.getAllSettings();
+    const chRaw = settings['channels'];
+    let ch: Record<string, unknown> | null = null;
+    try { ch = chRaw ? JSON.parse(chRaw) : null; } catch { ch = null; }
+
+    const dcCfg = ch?.discord as Record<string, string> | undefined;
+    const token = dcCfg?.botToken || '';
+    const chId = dcCfg?.channelId || '';
+    if (!token || !chId) { dcPollingActive = false; return; }
+
+    const key = repo.getSecret('apiKey') || '';
+    const mdl = settings['model'] || '';
+    const bUrl = settings['baseUrl'] || 'https://api.openai.com/v1';
+    const skName = settings['dcSkill'] || settings['skill'] || 'web-researcher';
+    const skill = allSkills.get(skName) || getBuiltinSkill('web-researcher')!;
+    if (!key || !mdl) { dcPollingTimer = setTimeout(poll, 10000); return; }
+
     try {
       const url = dcLastMessageId
-        ? `${DC_API}/channels/${channelId}/messages?after=${dcLastMessageId}&limit=10`
-        : `${DC_API}/channels/${channelId}/messages?limit=1`;
+        ? `${DC_API}/channels/${chId}/messages?after=${dcLastMessageId}&limit=10`
+        : `${DC_API}/channels/${chId}/messages?limit=1`;
 
-      const resp = await fetch(url, { headers: { Authorization: `Bot ${botToken}` } });
-      if (!resp.ok) { dcPollingTimer = setTimeout(poll, 5000); return; }
+      const resp = await fetch(url, { headers: { Authorization: `Bot ${token}` } });
+      if (!resp.ok) {
+        console.error(`  [DC] API error: ${resp.status} ${resp.statusText}`);
+        dcPollingTimer = setTimeout(poll, 5000);
+        return;
+      }
 
       const messages = (await resp.json()) as Array<{ id: string; content: string; author: { id: string; username: string; bot?: boolean }; timestamp: string }>;
       if (!Array.isArray(messages) || messages.length === 0) {
@@ -1614,10 +1702,8 @@ function startDiscordPolling(): void {
         return;
       }
 
-      // Discord returns newest first — reverse to process chronologically
       messages.reverse();
 
-      // On first poll, just record the latest ID without responding
       if (!dcLastMessageId) {
         dcLastMessageId = messages[messages.length - 1].id;
         dcPollingTimer = setTimeout(poll, 3000);
@@ -1626,27 +1712,26 @@ function startDiscordPolling(): void {
 
       for (const msg of messages) {
         dcLastMessageId = msg.id;
-        // Skip bot messages and own messages
         if (msg.author.bot || msg.author.id === botUserId) continue;
         if (!msg.content) continue;
 
         console.log(`  [DC] Message from ${msg.author.username}: ${msg.content.slice(0, 80)}`);
 
         try {
-          const enabledToolNames: string[] = selectedSkill.allowedTools.includes('*')
+          const enabledToolNames: string[] = skill.allowedTools.includes('*')
             ? ['browser_open', 'browser_search', 'create_task', 'get_weather']
-            : [...selectedSkill.allowedTools];
+            : [...skill.allowedTools];
 
-          const toolRegistry = createDemoTools(enabledToolNames, channels || undefined);
-          const { policy } = skillToAccessPolicy(selectedSkill);
+          const toolRegistry = createDemoTools(enabledToolNames, ch || undefined);
+          const { policy } = skillToAccessPolicy(skill);
           toolRegistry.setAccessPolicy(policy);
 
           const memory = new BufferMemory();
-          const llm = new OpenAIAdapter({ model, baseUrl: baseUrl.replace(/\/+$/, ''), apiKey });
+          const llm = new OpenAIAdapter({ model: mdl, baseUrl: bUrl.replace(/\/+$/, ''), apiKey: key });
 
           const goalText = `User "${msg.author.username}" sent a Discord message: "${msg.content}". Respond helpfully and concisely.`;
           const runId = `dc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-          repo.createRun(runId, goalText, skillName);
+          repo.createRun(runId, goalText, skName);
 
           const state = await runAgentLoop(
             { goal: goalText, runId },
@@ -1655,16 +1740,19 @@ function startDiscordPolling(): void {
           );
 
           const reply = state.finalAnswer || 'Sorry, I could not process your request.';
-
-          // Discord max message length is 2000 chars
           const truncatedReply = reply.length > 1900 ? reply.slice(0, 1900) + '...' : reply;
-          await fetch(`${DC_API}/channels/${channelId}/messages`, {
+
+          const sendResp = await fetch(`${DC_API}/channels/${chId}/messages`, {
             method: 'POST',
-            headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: truncatedReply }),
           });
 
-          console.log(`  [DC] Reply sent to ${msg.author.username}`);
+          if (!sendResp.ok) {
+            console.error(`  [DC] sendMessage failed: ${sendResp.status} ${sendResp.statusText}`);
+          } else {
+            console.log(`  [DC] Reply sent to ${msg.author.username} (${reply.length} chars)`);
+          }
           repo.finishRun(runId, state.currentStep, reply);
         } catch (err) {
           console.error(`  [DC] Agent error:`, err instanceof Error ? err.message : err);
@@ -1676,7 +1764,7 @@ function startDiscordPolling(): void {
     dcPollingTimer = setTimeout(poll, 3000);
   }
 
-  console.log(`  [DC] Discord polling started (channel: ${channelId}, skill: ${skillName})`);
+  console.log(`  [DC] Discord polling started (channel: ${channelId})`);
   poll();
 }
 
@@ -1719,17 +1807,18 @@ function startSlackPolling(): void {
   const botToken = slConfig?.botToken || '';
   const channelId = slConfig?.channelId || '';
   if (!botToken || !channelId) {
-    if (slPollingActive) { console.log('  [SL] Slack not configured — polling stopped'); slPollingActive = false; }
+    console.log('  [SL] ⚠ Slack bot token or channel ID not configured');
+    slPollingActive = false;
     return;
   }
 
   const apiKey = repo.getSecret('apiKey') || '';
   const model = savedSettings['model'] || '';
-  const baseUrl = savedSettings['baseUrl'] || 'https://api.openai.com/v1';
-  const skillName = savedSettings['slSkill'] || savedSettings['skill'] || 'web-researcher';
-  const selectedSkill = allSkills.get(skillName) || getBuiltinSkill('web-researcher')!;
-
-  if (!apiKey || !model) { return; }
+  if (!apiKey || !model) {
+    console.log('  [SL] ⚠ API key or model not configured');
+    slPollingActive = false;
+    return;
+  }
 
   slPollingActive = true;
 
@@ -1739,32 +1828,55 @@ function startSlackPolling(): void {
     method: 'POST',
     headers: { Authorization: `Bearer ${botToken}`, 'Content-Type': 'application/json' },
   }).then(r => r.json())
-    .then((data: { user_id?: string }) => { botUserId = data.user_id || ''; })
-    .catch(() => {});
+    .then((data: { ok?: boolean; user_id?: string; user?: string }) => {
+      botUserId = data.user_id || '';
+      if (data.ok) console.log(`  [SL] ✓ Bot verified: ${data.user || 'unknown'}`);
+      else console.error('  [SL] ✗ Slack auth.test failed');
+    })
+    .catch(err => { console.error('  [SL] ✗ Cannot verify bot:', err instanceof Error ? err.message : err); });
 
   async function poll(): Promise<void> {
     if (!slPollingActive) return;
+
+    // Reload settings from DB on each cycle
+    const settings = repo.getAllSettings();
+    const chRaw = settings['channels'];
+    let ch: Record<string, unknown> | null = null;
+    try { ch = chRaw ? JSON.parse(chRaw) : null; } catch { ch = null; }
+
+    const slCfg = ch?.slack as Record<string, string> | undefined;
+    const token = slCfg?.botToken || '';
+    const chId = slCfg?.channelId || '';
+    if (!token || !chId) { slPollingActive = false; return; }
+
+    const key = repo.getSecret('apiKey') || '';
+    const mdl = settings['model'] || '';
+    const bUrl = settings['baseUrl'] || 'https://api.openai.com/v1';
+    const skName = settings['slSkill'] || settings['skill'] || 'web-researcher';
+    const skill = allSkills.get(skName) || getBuiltinSkill('web-researcher')!;
+    if (!key || !mdl) { slPollingTimer = setTimeout(poll, 10000); return; }
+
     try {
-      const params = new URLSearchParams({ channel: channelId, limit: '10' });
+      const params = new URLSearchParams({ channel: chId, limit: '10' });
       if (slLastTs) params.set('oldest', slLastTs);
 
       const resp = await fetch(`https://slack.com/api/conversations.history?${params}`, {
-        headers: { Authorization: `Bearer ${botToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await resp.json() as {
         ok?: boolean;
+        error?: string;
         messages?: Array<{ ts: string; text: string; user?: string; bot_id?: string; subtype?: string }>;
       };
 
       if (!data.ok || !data.messages || data.messages.length === 0) {
+        if (data.error) console.error(`  [SL] API error: ${data.error}`);
         slPollingTimer = setTimeout(poll, 3000);
         return;
       }
 
-      // Slack returns newest first — reverse
       const msgs = [...data.messages].reverse();
 
-      // On first poll, just record latest ts
       if (!slLastTs) {
         slLastTs = msgs[msgs.length - 1].ts;
         slPollingTimer = setTimeout(poll, 3000);
@@ -1772,31 +1884,29 @@ function startSlackPolling(): void {
       }
 
       for (const msg of msgs) {
-        // Skip if same or older than last processed
         if (parseFloat(msg.ts) <= parseFloat(slLastTs)) continue;
         slLastTs = msg.ts;
 
-        // Skip bot messages, subtypes (joins, etc.)
         if (msg.bot_id || msg.subtype || msg.user === botUserId) continue;
         if (!msg.text) continue;
 
         console.log(`  [SL] Message from ${msg.user}: ${msg.text.slice(0, 80)}`);
 
         try {
-          const enabledToolNames: string[] = selectedSkill.allowedTools.includes('*')
+          const enabledToolNames: string[] = skill.allowedTools.includes('*')
             ? ['browser_open', 'browser_search', 'create_task', 'get_weather']
-            : [...selectedSkill.allowedTools];
+            : [...skill.allowedTools];
 
-          const toolRegistry = createDemoTools(enabledToolNames, channels || undefined);
-          const { policy } = skillToAccessPolicy(selectedSkill);
+          const toolRegistry = createDemoTools(enabledToolNames, ch || undefined);
+          const { policy } = skillToAccessPolicy(skill);
           toolRegistry.setAccessPolicy(policy);
 
           const memory = new BufferMemory();
-          const llm = new OpenAIAdapter({ model, baseUrl: baseUrl.replace(/\/+$/, ''), apiKey });
+          const llm = new OpenAIAdapter({ model: mdl, baseUrl: bUrl.replace(/\/+$/, ''), apiKey: key });
 
           const goalText = `User sent a Slack message: "${msg.text}". Respond helpfully and concisely.`;
           const runId = `sl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-          repo.createRun(runId, goalText, skillName);
+          repo.createRun(runId, goalText, skName);
 
           const state = await runAgentLoop(
             { goal: goalText, runId },
@@ -1806,13 +1916,18 @@ function startSlackPolling(): void {
 
           const reply = state.finalAnswer || 'Sorry, I could not process your request.';
 
-          await fetch('https://slack.com/api/chat.postMessage', {
+          const sendResp = await fetch('https://slack.com/api/chat.postMessage', {
             method: 'POST',
-            headers: { Authorization: `Bearer ${botToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channel: channelId, text: reply, thread_ts: msg.ts }),
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel: chId, text: reply, thread_ts: msg.ts }),
           });
+          const sendData = await sendResp.json().catch(() => ({})) as Record<string, unknown>;
 
-          console.log(`  [SL] Reply sent in thread`);
+          if (sendData?.ok) {
+            console.log(`  [SL] Reply sent in thread (${reply.length} chars)`);
+          } else {
+            console.error(`  [SL] sendMessage failed: ${sendData?.error || 'unknown'}`);
+          }
           repo.finishRun(runId, state.currentStep, reply);
         } catch (err) {
           console.error(`  [SL] Agent error:`, err instanceof Error ? err.message : err);
@@ -1824,7 +1939,7 @@ function startSlackPolling(): void {
     slPollingTimer = setTimeout(poll, 3000);
   }
 
-  console.log(`  [SL] Slack polling started (channel: ${channelId}, skill: ${skillName})`);
+  console.log(`  [SL] Slack polling started (channel: ${channelId})`);
   poll();
 }
 
@@ -1981,9 +2096,10 @@ server.listen(PORT, () => {
   console.log(`  Database: ${dbPath}`);
 
   // Auto-start channel polling if configured
-  try { startTelegramPolling(); } catch (e) { console.log('  [TG] Auto-start skipped:', e); }
-  try { startDiscordPolling(); } catch (e) { console.log('  [DC] Auto-start skipped:', e); }
-  try { startSlackPolling(); } catch (e) { console.log('  [SL] Auto-start skipped:', e); }
+  console.log('  Channels:');
+  try { startTelegramPolling(); } catch (e) { console.error('  [TG] Auto-start error:', e instanceof Error ? e.message : e); }
+  try { startDiscordPolling(); } catch (e) { console.error('  [DC] Auto-start error:', e instanceof Error ? e.message : e); }
+  try { startSlackPolling(); } catch (e) { console.error('  [SL] Auto-start error:', e instanceof Error ? e.message : e); }
 
   // Auto-connect MCP servers
   initMcpServers().catch(e => console.log('  [MCP] Auto-connect skipped:', e));
