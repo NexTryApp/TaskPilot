@@ -130,6 +130,21 @@ export function hasCommandSubstitution(command: string): boolean {
 }
 
 /**
+ * Extract embedded commands from -exec/-execdir blocks in find commands.
+ * E.g., `find /tmp -exec rm {} \;` → extracts `rm {}`
+ */
+export function extractExecCommands(command: string): string[] {
+  const results: string[] = [];
+  const execRegex = /-exec(?:dir)?\s+(.+?)(?:\s+\\;|\s+\+)/g;
+  let match;
+  while ((match = execRegex.exec(command)) !== null) {
+    const embedded = match[1].replace(/\{\}/g, '__placeholder__').trim();
+    if (embedded) results.push(embedded);
+  }
+  return results;
+}
+
+/**
  * Split and analyze a full command string.
  * Returns analysis with per-segment checks and overall worst severity.
  */
@@ -140,6 +155,17 @@ export function splitAndAnalyze(command: string, platform: Platform): ChainAnaly
 
   for (const seg of rawSegments) {
     const checks = checkCommand(seg.raw, platform);
+
+    // Also check embedded commands inside -exec/-execdir blocks
+    const embeddedCmds = extractExecCommands(seg.raw);
+    for (const embedded of embeddedCmds) {
+      const embeddedChecks = checkCommand(embedded, platform);
+      for (const ec of embeddedChecks) {
+        ec.explanation += ' (embedded in find -exec)';
+        checks.push(ec);
+      }
+    }
+
     allChecks.push(...checks);
     segments.push({
       raw: seg.raw,

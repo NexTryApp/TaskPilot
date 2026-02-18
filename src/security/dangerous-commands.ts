@@ -344,6 +344,58 @@ const DANGEROUS_PATTERNS: DangerousPattern[] = [
     platforms: ['linux', 'macos'],
   },
 
+  // --- EMBEDDED COMMANDS: find -exec, xargs, etc. (BLOCK/WARN) ---
+
+  {
+    pattern: /\bfind\b.*-exec\s+(rm|shred|dd|mkfs|wipefs)\b/,
+    severity: 'BLOCK',
+    category: 'FILESYSTEM_DESTRUCTION',
+    explanation: 'Destructive command embedded in find -exec — can delete/destroy matched files',
+    platforms: ['linux', 'macos'],
+  },
+  {
+    pattern: /\bfind\b.*-execdir\s+(rm|shred|dd|mkfs|wipefs)\b/,
+    severity: 'BLOCK',
+    category: 'FILESYSTEM_DESTRUCTION',
+    explanation: 'Destructive command embedded in find -execdir — can delete/destroy matched files',
+    platforms: ['linux', 'macos'],
+  },
+  {
+    pattern: /\bfind\b.*-delete\b/,
+    severity: 'WARN',
+    category: 'FILESYSTEM_DESTRUCTION',
+    explanation: 'find -delete removes all matched files — verify the filter is correct',
+    platforms: ['linux', 'macos'],
+  },
+  {
+    pattern: /\bxargs\s+(rm|shred|dd|mkfs|wipefs)\b/,
+    severity: 'BLOCK',
+    category: 'FILESYSTEM_DESTRUCTION',
+    explanation: 'Destructive command via xargs — can delete/destroy piped file list',
+    platforms: ['linux', 'macos'],
+  },
+  {
+    pattern: /\bxargs\s+rm\s+(-[a-zA-Z]*r[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*)/,
+    severity: 'BLOCK',
+    category: 'FILESYSTEM_DESTRUCTION',
+    explanation: 'Recursive/force delete via xargs — can wipe entire directory trees',
+    platforms: ['linux', 'macos'],
+  },
+  {
+    pattern: /\bfind\b.*-exec\s+chmod\s+[247]77\b/,
+    severity: 'BLOCK',
+    category: 'PRIVILEGE_ESCALATION',
+    explanation: 'Setting world-writable permissions on matched files via find -exec',
+    platforms: ['linux', 'macos'],
+  },
+  {
+    pattern: /\bfind\b.*-exec\s+(mv|cp|chmod|chown)\b/,
+    severity: 'WARN',
+    category: 'FILE_MODIFICATION',
+    explanation: 'File modification command embedded in find -exec — verify the filter is correct',
+    platforms: ['linux', 'macos'],
+  },
+
   // --- ADDITIONAL DANGEROUS TOOLS (BLOCK) ---
 
   {
