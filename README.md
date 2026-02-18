@@ -17,6 +17,16 @@ AI agents that **can't** nuke your system. Built-in command security, LLM-powere
 <!-- TODO: Add GIF demo here before launch -->
 <!-- ![TaskPilot Demo](docs/demo.gif) -->
 
+### Who is this for?
+
+- **Developers** who want AI agents but don't trust them with `rm -rf /`
+- **Teams** evaluating AI coding assistants and need a security layer
+- **Students** learning about AI agents — small codebase, easy to understand
+- **Self-hosters** who want everything local, no cloud, no telemetry
+- **Anyone** who doesn't want to learn Rust or Go just to run an AI agent
+
+> Unlike infrastructure-heavy frameworks (Rust binaries, Docker daemons, CLI wizards), TaskPilot is a **single TypeScript project** you can read, modify, and deploy in minutes.
+
 ### Highlights
 
 - **Command Security** — dangerous commands (rm -rf, format, shutdown) are blocked before execution
@@ -462,6 +472,15 @@ TaskPilot is built on the OpenClaw foundation but adds enterprise-grade security
 Contributions are welcome! Feel free to open issues or pull requests.
 
 Please check the [Good First Issues](../../issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for a place to start.
+
+---
+
+## Support
+
+If TaskPilot helps your work, consider supporting development:
+
+<!-- TODO: Replace with your actual Buy Me a Coffee username -->
+<a href="https://buymeacoffee.com/nextryapp"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee"></a>
 
 ---
 
