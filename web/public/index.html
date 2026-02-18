@@ -50,9 +50,11 @@
             <label for="apiKey">API Key</label>
             <div class="api-key-row">
               <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+              <button type="button" id="testKeyBtn" class="btn-test-key" title="Test API key">Test</button>
               <a href="https://platform.openai.com/api-keys" target="_blank" id="keyLink" class="btn-get-key" title="Open platform to get API key">&#x1F511; Get Key</a>
             </div>
             <span class="hint" id="keyHint">Opens <strong id="keyLinkLabel">platform.openai.com</strong> — sign in, create a key, paste it here</span>
+            <span class="hint" id="testKeyResult" style="display:none"></span>
           </div>
           <div class="form-group">
             <label for="model">Model</label>
@@ -77,11 +79,19 @@
             </div>
           </div>
           <div class="channel-body" id="ch-telegram-body">
+            <div class="ch-skill-warning" id="tg-skill-warning" style="display:none; background:#f85149; color:#fff; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-size:0.85rem;">
+              Current skill does not have Telegram access. Switch to <strong>sys-admin</strong> on Page 2.
+            </div>
             <div class="ch-credentials">
+              <div class="ch-howto" style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; font-size:0.85rem; line-height:1.5;">
+                <strong>How to get a Bot Token (3 steps):</strong><br>
+                1. Open Telegram, find <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent)">@BotFather</a><br>
+                2. Send <code>/newbot</code>, choose a name and username<br>
+                3. Copy the token (looks like <code>123456:ABC-DEF1234ghIkl...</code>) and paste below
+              </div>
               <div class="form-group">
                 <label>Bot Token <span class="req">*</span></label>
-                <input type="password" id="tg-token" placeholder="123456:ABC-DEF..." autocomplete="off">
-                <span class="hint">Chat with <a href="https://t.me/BotFather" target="_blank">@BotFather</a> &rarr; /newbot &rarr; copy token</span>
+                <input type="password" id="tg-token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v..." autocomplete="off">
               </div>
               <div class="form-group">
                 <label>Bot Username</label>
@@ -186,7 +196,7 @@
             <span class="ch-icon">&#x1F310;</span>
             <div class="ch-meta">
               <strong>Web Browser</strong>
-              <span class="ch-status connected" id="ch-browser-status">Ready</span>
+              <span class="ch-status" id="ch-browser-status">No credentials needed</span>
             </div>
           </div>
           <div class="channel-body" id="ch-browser-body">
@@ -212,7 +222,7 @@
             <span class="ch-icon">&#x1F4BB;</span>
             <div class="ch-meta">
               <strong>Terminal</strong>
-              <span class="ch-status connected" id="ch-terminal-status">Ready</span>
+              <span class="ch-status" id="ch-terminal-status">No credentials needed</span>
             </div>
           </div>
           <div class="channel-body" id="ch-terminal-body">

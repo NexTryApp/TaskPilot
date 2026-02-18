@@ -207,6 +207,25 @@ body {
 }
 .btn-get-key:hover { background: #2ea043; transform: translateY(-1px); }
 .btn-get-key:active { transform: translateY(0); }
+.btn-test-key {
+  padding: 8px 14px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-test-key:hover { border-color: var(--accent); color: var(--accent); }
+.btn-test-key.testing { opacity: 0.6; pointer-events: none; }
+.btn-test-key.ok { border-color: #2ea043; color: #2ea043; }
+.btn-test-key.fail { border-color: #f85149; color: #f85149; }
+#testKeyResult { margin-top: 4px; font-size: 0.78rem; }
+#testKeyResult.ok { color: #2ea043; }
+#testKeyResult.fail { color: #f85149; }
 
 /* ===== Forms ===== */
 .form-group {

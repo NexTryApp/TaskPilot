@@ -7,9 +7,9 @@
 
 // ===== Model catalogs per provider =====
 const MODEL_CATALOG = {
-  openai:     ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o3-mini', 'o4-mini'],
+  openai:     ['gpt-5.2', 'gpt-5.2-pro', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.1', 'gpt-5.1-codex', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'o3'],
   anthropic:  ['claude-opus-4-20250514', 'claude-sonnet-4-20250514', 'claude-3.5-haiku-20241022'],
-  gemini:     ['gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
+  gemini:     ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
   deepseek:   ['deepseek-chat', 'deepseek-reasoner'],
   groq:       ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
   mistral:    ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
@@ -21,8 +21,8 @@ const MODEL_CATALOG = {
   qwen:       ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen2.5-72b-instruct'],
   glm:        ['glm-4-plus', 'glm-4-flash', 'glm-4'],
   bedrock:    ['anthropic.claude-sonnet-4-20250514-v1:0', 'anthropic.claude-3-haiku-20240307-v1:0', 'meta.llama3-70b-instruct-v1:0'],
-  openrouter: ['openai/gpt-4o', 'openai/gpt-4o-mini', 'anthropic/claude-sonnet-4', 'anthropic/claude-3.5-haiku', 'google/gemini-2.0-flash', 'meta-llama/llama-3.3-70b-instruct', 'deepseek/deepseek-chat', 'qwen/qwen-2.5-72b-instruct'],
-  ollama:     ['llama3', 'llama3.1', 'mistral', 'qwen2.5', 'gemma2', 'phi3', 'codellama', 'deepseek-r1'],
+  openrouter: ['openai/gpt-5.2', 'openai/gpt-5-mini', 'openai/gpt-4.1', 'anthropic/claude-sonnet-4', 'anthropic/claude-3.5-haiku', 'google/gemini-2.5-flash', 'meta-llama/llama-3.3-70b-instruct', 'deepseek/deepseek-chat'],
+  ollama:     ['llama3.3', 'llama3.1', 'mistral', 'qwen2.5', 'gemma2', 'phi3', 'codellama', 'deepseek-r1'],
 };
 
 const PROVIDER_KEY_LINKS = {
@@ -193,6 +193,7 @@ function selectSkill(skillKey) {
     if (dot) { dot.className = `security-dot ${info.cls}`; }
     if (text) { text.textContent = info.text; }
   }
+  updateChannelSkillWarnings();
 }
 
 // ===== Settings: Auto-load + Save =====
@@ -731,6 +732,53 @@ providerBtns.forEach(btn => {
 
 populateModels('openai');
 
+// ===== Test API Key =====
+const testKeyBtn = document.getElementById('testKeyBtn');
+const testKeyResult = document.getElementById('testKeyResult');
+
+testKeyBtn?.addEventListener('click', async () => {
+  const key = apiKeyInput.value.trim();
+  if (!key) return alert('Enter an API key first');
+
+  testKeyBtn.className = 'btn-test-key testing';
+  testKeyBtn.textContent = '...';
+  testKeyResult.style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/test-key', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: key, baseUrl: selectedBaseUrl, model: getSelectedModel() }),
+    });
+    const data = await resp.json();
+
+    testKeyResult.style.display = '';
+    if (data.ok) {
+      testKeyBtn.className = 'btn-test-key ok';
+      testKeyBtn.textContent = 'OK';
+      testKeyResult.className = 'hint ok';
+      testKeyResult.textContent = `Key valid (${data.rawKey}). Model: ${data.model}, reply: "${data.reply}"`;
+
+    } else {
+      testKeyBtn.className = 'btn-test-key fail';
+      testKeyBtn.textContent = 'Fail';
+      testKeyResult.className = 'hint fail';
+      testKeyResult.textContent = `${data.error} | key=${data.rawKey} len=${data.keyLength} url=${data.url}`;
+    }
+  } catch (err) {
+    testKeyBtn.className = 'btn-test-key fail';
+    testKeyBtn.textContent = 'Fail';
+    testKeyResult.style.display = '';
+    testKeyResult.className = 'hint fail';
+    testKeyResult.textContent = 'Connection error: ' + err.message;
+  }
+
+  setTimeout(() => {
+    testKeyBtn.className = 'btn-test-key';
+    testKeyBtn.textContent = 'Test';
+  }, 5000);
+});
+
 // ===== Render Connection Info =====
 function renderConnectionInfo(channel) {
   const el = document.getElementById(`ch-${channel}-conn`);
@@ -811,6 +859,20 @@ function selectChannel(activeCard) {
       body.classList.remove('open');
     }
   });
+  updateChannelSkillWarnings();
+}
+
+// Show warning if selected channel requires a skill that isn't currently selected
+function updateChannelSkillWarnings() {
+  const tgWarning = document.getElementById('tg-skill-warning');
+  if (!tgWarning) return;
+  const tgChecked = document.getElementById('ch-telegram')?.checked;
+  // Telegram only works with sys-admin skill
+  if (tgChecked && selectedSkill !== 'sys-admin') {
+    tgWarning.style.display = 'block';
+  } else {
+    tgWarning.style.display = 'none';
+  }
 }
 
 function deselectAllChannels() {

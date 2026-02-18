@@ -4,34 +4,106 @@ Secure AI agent framework with built-in safety system, skill-based access contro
 
 ---
 
-## Quick Start
+## Installation
 
-### One Click (Windows)
+### Prerequisites
 
-Double-click **`start.bat`** — browser opens at `http://localhost:4242`.
+| Requirement | Version | Check |
+|-------------|---------|-------|
+| **Node.js** | 18+ (recommended 20 LTS) | `node --version` |
+| **npm** | comes with Node.js | `npm --version` |
+| **Git** | any | `git --version` |
 
-### One Click (Linux / macOS)
+> **Don't have Node.js?** Download from [nodejs.org](https://nodejs.org/) — choose "LTS" version. Install with default settings.
 
-```bash
-chmod +x start.sh && ./start.sh
+---
+
+### Option A: One Click
+
+The easiest way. The launcher checks Node.js, installs dependencies automatically, and opens the browser.
+
+**Windows:**
+```
+1. Download or clone the repository
+2. Double-click start.bat
+3. Browser opens at http://localhost:4242
 ```
 
-### Manual
-
+**Linux / macOS:**
 ```bash
+chmod +x start.sh
+./start.sh
+# Browser opens at http://localhost:4242
+```
+
+The launcher will:
+- Check that Node.js is installed
+- Run `npm install` on first launch (if `node_modules/` doesn't exist)
+- Create `data/` directory for the database
+- Start the server and open your browser
+
+---
+
+### Option B: Step by Step
+
+#### Windows
+
+```powershell
+# 1. Clone the repository
+git clone https://github.com/nicekid1/TaskPilot.git
+cd TaskPilot
+
+# 2. Install dependencies
 npm install
+
+# 3. Start the server
 npx tsx web/server.ts
+
+# 4. Open in browser
+# http://localhost:4242
 ```
 
-Then open **http://localhost:4242**.
-
-### Docker (recommended for isolation)
+#### Linux / macOS
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/nicekid1/TaskPilot.git
+cd TaskPilot
+
+# 2. Install dependencies
+npm install
+
+# 3. Start the server
+npx tsx web/server.ts
+
+# 4. Open in browser
+# http://localhost:4242
+```
+
+---
+
+### Option C: Docker (recommended for isolation)
+
+```bash
+git clone https://github.com/nicekid1/TaskPilot.git
+cd TaskPilot
 docker compose up --build
+# Open http://localhost:4242
 ```
 
 Agent terminal commands run inside an **isolated sandbox container**, not on your host machine.
+
+---
+
+### After Launch
+
+1. **Page 1 — Setup**: Choose an LLM provider (OpenAI, Anthropic, Gemini, etc.), paste your API key, optionally enable channels (Telegram, Browser, Terminal)
+2. **Page 2 — Agent**: Pick a skill (Web Researcher = safest), set a goal, click "Start Agent"
+3. **Page 3 — Dashboard**: Watch the agent work in real time — activity feed, security log, approval modals
+
+Your API key is **saved encrypted** locally in `data/taskpilot.db` — you only need to enter it once.
+
+> **No API key?** Use **Ollama** provider with a local model — completely free, no internet needed. Install [Ollama](https://ollama.com/), run `ollama pull llama3`, select "Ollama" in TaskPilot.
 
 ---
 
@@ -81,7 +153,7 @@ When a command triggers WARN level:
 
 - **Session auth**: All sensitive endpoints require `X-Session-Token` (issued at page load, CORS-protected)
 - **SSRF filter**: `browser_open` blocks localhost, private IPs, cloud metadata, non-http(s) schemes
-- **Rate limiting**: Max 10 agent runs per minute
+- **Rate limiting**: Max 10 agent runs per minute (per IP)
 - **Encrypted storage**: API keys encrypted with AES-256-GCM using a random key (`data/.encryption-key`)
 
 ### Security Advisor (LLM-Powered)
@@ -107,14 +179,29 @@ Scans the project for hardcoded secrets, unsafe patterns, skill misconfiguration
 
 Skills define what an agent can do. Each skill controls available tools and security level.
 
-| Skill | Level | Tools | Description |
-|-------|-------|-------|-------------|
-| **Web Researcher** | Safe (green) | browser_open, browser_search | Only web search — no terminal, no files |
-| **Task Manager** | Safe (green) | create_task, get_weather, browser_search | Tasks and information |
-| **Safe Coder** | Moderate (yellow) | terminal_run (restricted), browser_* | Code without file deletion |
-| **Sys Admin** | Full (red) | All tools (with warnings) | Full access for experienced users |
+| Skill | Level | Description |
+|-------|-------|-------------|
+| **Web Researcher** | Safe (green) | Only web search — no terminal, no files |
+| **Task Manager** | Safe (green) | Tasks and information — no terminal |
+| **Safe Coder** | Moderate (yellow) | Code without file deletion |
+| **Sys Admin** | Full (red) | Full access for experienced users |
 
-**Default: Web Researcher** — the safest option.
+**Default: Web Researcher** — the safest option. Each next level includes all tools from the previous level + adds new ones.
+
+### Tool Access Matrix
+
+| Tool | Web Researcher | Task Manager | Safe Coder | Sys Admin |
+|------|:-:|:-:|:-:|:-:|
+| `browser_open` | + | + | + | + |
+| `browser_search` | + | + | + | + |
+| `create_task` | + | + | + | + |
+| `get_weather` | + | + | + | + |
+| `terminal_run` | - | - | + (restricted) | + |
+| `send_email` | - | - | - | + |
+| `telegram_send` | - | - | - | + |
+| `telegram_read` | - | - | - | + |
+
+**Safe Coder** terminal restrictions: only `cat`, `ls`, `grep`, `git`, `node`, `npm`, `python`, `mkdir`, `touch`, `echo`. Blocked: `rm`, `del`, `rmdir`, `format`, `shutdown`.
 
 ### Custom Skills
 
@@ -124,8 +211,8 @@ Create `.md` files in `skills/` directory with YAML frontmatter:
 ---
 name: My Custom Skill
 description: What this skill does
-descriptionRu: Описание на русском
-icon: "🔧"
+descriptionRu: Description in Russian
+icon: "wrench"
 securityLevel: moderate
 allowedTools: [browser_open, browser_search, terminal_run]
 deniedTools: [send_email]
@@ -312,7 +399,7 @@ TaskPilot is built on the OpenClaw foundation but adds enterprise-grade security
 | **Context Compression** | 3-tier progressive compression + pinned context (user name never forgotten) | Simple truncation, forgets user after ~2 weeks |
 | **Session Auth** | X-Session-Token on every request, CORS-protected | No session protection |
 | **Encryption** | AES-256-GCM with random key | AES-256-GCM with deterministic key (hostname+username) — vulnerability |
-| **Rate Limiting** | 10 agent runs per minute | None |
+| **Rate Limiting** | 10 agent runs per minute (per IP) | None |
 | **Security Audit** | `security-audit.ts` — project-wide scanner for secrets and misconfigurations | None |
 | **Tool Filtering** | LLM only sees tools it can actually use (filtered by skill policy) | All tools visible regardless |
 | **LLM Providers** | 15+ (OpenAI, Anthropic, Gemini, DeepSeek, xAI, Ollama, and more) | Same |

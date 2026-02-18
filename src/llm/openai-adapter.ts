@@ -81,7 +81,7 @@ export class OpenAIAdapter implements LLMAdapter {
 
   constructor(options: OpenAIAdapterOptions = {}) {
     this.apiKey = options.apiKey ?? process.env['OPENAI_API_KEY'] ?? '';
-    this.model = options.model ?? 'gpt-4o-mini';
+    this.model = options.model ?? 'gpt-5.2';
     const base = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
     this.chatUrl = `${base}/chat/completions`;
     if (!this.apiKey) throw new Error('OpenAIAdapter: API key required (apiKey option or OPENAI_API_KEY env)');

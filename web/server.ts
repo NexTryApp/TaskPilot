@@ -253,52 +253,118 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
 
   const registry = new ToolRegistry();
 
+  // --- Telegram: real Bot API integration ---
+  const tgCfg = channelConfig?.telegram as Record<string, string> | undefined;
+  const tgBotToken = tgCfg?.botToken || '';
+  const TG_API = tgBotToken ? `https://api.telegram.org/bot${tgBotToken}` : '';
+
   if (enabledTools.includes('telegram_send')) {
     registry.register({
       name: 'telegram_send',
       definition: {
         name: 'telegram_send',
-        description: 'Send a message via Telegram bot to a chat or user.',
+        description: 'Send a message via Telegram bot to a chat or user. Use chat_id (number) or @username.',
         parameters: {
-          to: { type: 'string', description: 'Chat ID or username (e.g. @user or chat_id)' },
-          text: { type: 'string', description: 'Message text to send' },
+          to: { type: 'string', description: 'Chat ID (number) or @username to send message to' },
+          text: { type: 'string', description: 'Message text to send (supports Markdown)' },
         },
       },
       async execute(args) {
-        await delay(800);
-        return {
-          sent: true,
-          to: args['to'],
-          text: args['text'],
-          messageId: Math.floor(Math.random() * 100000),
-          timestamp: new Date().toISOString(),
-        };
+        if (!TG_API) return { error: 'Telegram bot token not configured. Enter it in the Telegram channel settings.' };
+        const chatId = args['to'];
+        const text = args['text'];
+        if (!chatId || !text) return { error: 'Both "to" (chat_id) and "text" are required.' };
+
+        try {
+          const resp = await fetch(`${TG_API}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text,
+              parse_mode: 'Markdown',
+            }),
+          });
+          const data = await resp.json() as { ok?: boolean; result?: { message_id?: number }; description?: string };
+          if (!data.ok) return { error: `Telegram API error: ${data.description || 'Unknown error'}` };
+          return {
+            sent: true,
+            to: chatId,
+            text,
+            messageId: data.result?.message_id,
+            timestamp: new Date().toISOString(),
+          };
+        } catch (err: unknown) {
+          return { error: `Telegram send failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
       },
     });
   }
 
   if (enabledTools.includes('telegram_read')) {
+    // Track last update_id to avoid duplicates
+    let lastUpdateId = 0;
+
     registry.register({
       name: 'telegram_read',
       definition: {
         name: 'telegram_read',
-        description: 'Read the latest messages from a Telegram chat.',
+        description: 'Read the latest incoming messages to this Telegram bot.',
         parameters: {
-          chat: { type: 'string', description: 'Chat ID or username' },
-          limit: { type: 'number', description: 'Number of messages to read (default 5)' },
+          limit: { type: 'number', description: 'Number of messages to read (default 10, max 100)' },
         },
       },
       async execute(args) {
-        await delay(600);
-        const chat = args['chat'] || 'general';
-        return {
-          chat,
-          messages: [
-            { from: 'Alice', text: 'Hey, did you check the weather?', time: '10:30' },
-            { from: 'Bob', text: 'Not yet, can someone look it up?', time: '10:32' },
-            { from: 'Alice', text: 'Also we need to plan the meeting', time: '10:35' },
-          ],
-        };
+        if (!TG_API) return { error: 'Telegram bot token not configured. Enter it in the Telegram channel settings.' };
+        const limit = Math.min(Number(args['limit']) || 10, 100);
+
+        try {
+          const params = new URLSearchParams({
+            limit: String(limit),
+            allowed_updates: JSON.stringify(['message']),
+          });
+          if (lastUpdateId > 0) params.set('offset', String(lastUpdateId + 1));
+
+          const resp = await fetch(`${TG_API}/getUpdates?${params}`);
+          const data = await resp.json() as {
+            ok?: boolean;
+            result?: Array<{
+              update_id: number;
+              message?: {
+                message_id: number;
+                from?: { id: number; first_name?: string; username?: string };
+                chat: { id: number; type: string; title?: string };
+                date: number;
+                text?: string;
+              };
+            }>;
+            description?: string;
+          };
+
+          if (!data.ok) return { error: `Telegram API error: ${data.description || 'Unknown error'}` };
+
+          const updates = data.result || [];
+          if (updates.length > 0) {
+            lastUpdateId = updates[updates.length - 1].update_id;
+          }
+
+          const messages = updates
+            .filter(u => u.message?.text)
+            .map(u => ({
+              updateId: u.update_id,
+              messageId: u.message!.message_id,
+              from: u.message!.from?.first_name || u.message!.from?.username || 'Unknown',
+              fromId: u.message!.from?.id,
+              chatId: u.message!.chat.id,
+              chatType: u.message!.chat.type,
+              text: u.message!.text,
+              date: new Date(u.message!.date * 1000).toISOString(),
+            }));
+
+          return { count: messages.length, messages };
+        } catch (err: unknown) {
+          return { error: `Telegram read failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
       },
     });
   }
@@ -649,6 +715,75 @@ app.post('/api/settings', requireAuth, (req, res) => {
     }
   }
   res.json({ ok: true });
+});
+
+// --- Test API Key ---
+app.post('/api/test-key', requireAuth, async (req, res) => {
+  const { apiKey, baseUrl, model } = req.body;
+  if (!apiKey) return res.status(400).json({ ok: false, error: 'apiKey is required' });
+
+  const base = (baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const chatUrl = `${base}/chat/completions`;
+  const testModel = model || 'gpt-4o-mini';
+
+  // DEBUG: log what we're sending
+  console.log('[test-key] URL:', chatUrl);
+  console.log('[test-key] Model:', testModel);
+  console.log('[test-key] Key length:', apiKey.length);
+  console.log('[test-key] Key preview:', `${apiKey.slice(0, 10)}...${apiKey.slice(-6)}`);
+  console.log('[test-key] Key hex (first 20 chars):', Buffer.from(apiKey.slice(0, 20)).toString('hex'));
+
+  try {
+    const reqBody = {
+      model: testModel,
+      messages: [{ role: 'user', content: 'Say "ok"' }],
+      max_tokens: 3,
+    };
+    console.log('[test-key] Request body:', JSON.stringify(reqBody));
+
+    const resp = await fetch(chatUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(reqBody),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    console.log('[test-key] Response status:', resp.status);
+    console.log('[test-key] Response headers:', Object.fromEntries(resp.headers.entries()));
+
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      console.log('[test-key] Error body:', body);
+      let errorMsg = `API returned ${resp.status}: ${body.slice(0, 500)}`;
+      if (resp.status === 401) errorMsg = `401 Unauthorized. Raw response: ${body.slice(0, 300)}`;
+      if (resp.status === 429) errorMsg = 'Rate limit or quota exceeded (429). Check your billing and usage limits.';
+      if (resp.status === 404) errorMsg = `Model "${testModel}" not found (404). Try a different model.`;
+      return res.json({
+        ok: false,
+        status: resp.status,
+        error: errorMsg,
+        rawKey: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`,
+        keyLength: apiKey.length,
+        url: chatUrl,
+      });
+    }
+
+    const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }>; model?: string };
+    const reply = data.choices?.[0]?.message?.content || '';
+    return res.json({
+      ok: true,
+      model: data.model || testModel,
+      reply: reply.trim(),
+      rawKey: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log('[test-key] Exception:', msg);
+    return res.json({ ok: false, error: `Connection failed: ${msg}` });
+  }
 });
 
 // --- History ---
