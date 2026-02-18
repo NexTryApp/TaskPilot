@@ -1526,7 +1526,7 @@ function startTelegramPolling(): void {
             memory, toolRegistry, llm, null,
             {
               maxSteps: 8,
-              systemPrompt: 'You are a helpful AI assistant responding to Telegram messages. Be concise. Answer in the same language the user writes in.',
+              systemPrompt: 'You are a helpful AI assistant responding to Telegram messages. Be concise. CRITICAL RULE: You MUST ALWAYS reply in the SAME language the user writes in. If the user writes in Russian — reply in Russian. If in English — reply in English. Even if fetched content is in another language, translate your answer to the user\'s language. Never switch languages.',
             }
           );
 
