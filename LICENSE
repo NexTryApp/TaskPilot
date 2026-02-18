@@ -1,78 +1,21 @@
-TaskPilot Source Available License v1.0
+MIT License
 
 Copyright (c) 2026 NexTryApp
 
-Permission is hereby granted to any person obtaining a copy of this software
-and associated documentation files (the "Software"), to use the Software
-subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. PERMITTED USE
-   You may use, copy, modify, and distribute the Software for any purpose
-   (including commercial use) provided that you comply with ALL conditions
-   set forth below. Commercial use WITHOUT visible attribution and an
-   active hyperlink as described in Section 2 is STRICTLY PROHIBITED.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-2. REQUIRED ATTRIBUTION (MANDATORY FOR ALL USE)
-   For ANY use of the Software — personal, educational, or commercial —
-   including but not limited to: websites, web applications, APIs, SaaS
-   products, mobile applications, desktop applications, printed materials,
-   presentations, videos, and social media — you MUST display a clearly
-   visible attribution:
-
-       "Powered by TaskPilot"
-
-   with an active clickable hyperlink to:
-
-       https://github.com/NexTryApp/TaskPilot
-
-   The attribution MUST be:
-   - placed in a VISIBLE location that end users can see without scrolling
-     or navigating (site footer, application header, "About" page, or
-     equivalent prominent position);
-   - legible (minimum readable font size, sufficient contrast);
-   - accessible to end users without additional actions (no hidden menus,
-     no developer consoles, no source code comments);
-   - in the case of web applications and websites, include an ACTIVE
-     HYPERLINK (not plain text);
-   - in the case of mobile/desktop applications, include the full URL
-     as tappable/clickable link.
-
-   COMMERCIAL USE WITHOUT ATTRIBUTION IS PROHIBITED. Failure to include
-   the required visible attribution automatically revokes your right to
-   use the Software for any commercial purpose.
-
-3. NO REMOVAL OF ATTRIBUTION
-   You may not remove, hide, obscure, minimize, or make unreadable the
-   TaskPilot attribution and link to the repository from any derivative
-   works, forks, distributions, or deployments. Any attempt to circumvent
-   the attribution requirement (including but not limited to: CSS hiding,
-   zero-size fonts, off-screen placement, JavaScript removal, or display:none)
-   is a violation of this license.
-
-4. DISCLAIMER OF WARRANTIES
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-   IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-   CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-   TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-5. CONTRIBUTIONS
-   By submitting a pull request or any other contribution to this project,
-   you agree that your contribution is licensed under the same terms as
-   this license (TaskPilot Source Available License v1.0), and you grant
-   NexTryApp a perpetual, irrevocable, worldwide, royalty-free license to
-   use, modify, and distribute your contribution as part of the Software.
-
-6. PATENT GRANT
-   Each contributor hereby grants to the recipients of the Software a
-   perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-   patent license to make, use, sell, and otherwise transfer the Software,
-   where such license applies only to those patent claims licensable by
-   such contributor that are necessarily infringed by their contribution(s)
-   alone or in combination with the Software.
-
-7. TERMINATION
-   Violation of any of these conditions automatically terminates your
-   rights under this license.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
