@@ -122,6 +122,7 @@ const TOOL_CATALOG: ToolMeta[] = [
   { name: 'slack_send', description: 'Send a message to Slack', platform: 'slack', platformLabel: 'Slack', icon: 'slack' },
   { name: 'slack_read', description: 'Read messages from a Slack channel', platform: 'slack', platformLabel: 'Slack', icon: 'slack' },
   { name: 'browser_open', description: 'Open a URL in the browser and get page content', platform: 'chrome', platformLabel: 'Chrome Browser', icon: 'chrome' },
+  { name: 'open_url', description: 'Open a URL in the local browser (Chrome/Firefox/etc.)', platform: 'chrome', platformLabel: 'Local Browser', icon: 'chrome' },
   { name: 'browser_search', description: 'Search the web via browser', platform: 'chrome', platformLabel: 'Chrome Browser', icon: 'chrome' },
   { name: 'terminal_run', description: 'Execute a command in the terminal', platform: 'terminal', platformLabel: 'Terminal', icon: 'terminal' },
   { name: 'create_task', description: 'Create a task in the task manager', platform: 'task-manager', platformLabel: 'Task Manager', icon: 'tasks' },
@@ -457,6 +458,49 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
           const message = err instanceof Error ? err.message : String(err);
           return { url, error: message, status: 0 };
         }
+      },
+    });
+  }
+
+  // --- OPEN URL IN LOCAL BROWSER ---
+  if (enabledTools.includes('open_url')) {
+    registry.register({
+      name: 'open_url',
+      definition: {
+        name: 'open_url',
+        description: 'Open a URL in the user\'s default browser (Chrome, Firefox, etc.) on the local machine. Only works when the server runs locally.',
+        parameters: {
+          url: { type: 'string', description: 'Full URL to open (e.g. https://example.com)' },
+        },
+      },
+      async execute(args) {
+        const url = String(args['url'] || '');
+        if (!url) return { error: 'URL is required' };
+
+        // Basic URL validation
+        try { new URL(url); } catch { return { error: `Invalid URL: ${url}` }; }
+
+        const { exec } = await import('child_process');
+        const platform = process.platform;
+
+        let cmd: string;
+        if (platform === 'win32') {
+          cmd = `start "" "${url}"`;
+        } else if (platform === 'darwin') {
+          cmd = `open "${url}"`;
+        } else {
+          cmd = `xdg-open "${url}"`;
+        }
+
+        return new Promise((resolve) => {
+          exec(cmd, { timeout: 5000 }, (err) => {
+            if (err) {
+              resolve({ url, opened: false, error: err.message });
+            } else {
+              resolve({ url, opened: true, platform });
+            }
+          });
+        });
       },
     });
   }
@@ -1065,7 +1109,7 @@ app.post('/api/run', requireAuth, async (req, res) => {
     if (channels?.browser) { enabledToolNames.push('browser_open', 'browser_search'); }
     if (channels?.terminal) { enabledToolNames.push('terminal_run'); }
     if (channels?.email) { enabledToolNames.push('send_email'); }
-    enabledToolNames.push('create_task', 'get_weather');
+    enabledToolNames.push('create_task', 'get_weather', 'open_url');
   } else {
     // Only tools allowed by skill
     enabledToolNames.push(...selectedSkill.allowedTools);
@@ -1500,7 +1544,7 @@ function startTelegramPolling(): void {
         try {
           const enabledToolNames: string[] = [];
           if (skill.allowedTools.includes('*')) {
-            enabledToolNames.push('telegram_send', 'telegram_read', 'browser_open', 'browser_search', 'create_task', 'get_weather');
+            enabledToolNames.push('telegram_send', 'telegram_read', 'browser_open', 'browser_search', 'open_url', 'create_task', 'get_weather');
           } else {
             enabledToolNames.push(...skill.allowedTools);
           }
