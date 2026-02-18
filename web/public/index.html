@@ -120,10 +120,16 @@
           </div>
           <div class="channel-body" id="ch-discord-body">
             <div class="ch-credentials">
+              <div class="ch-howto" style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; font-size:0.85rem; line-height:1.5;">
+                <strong>How to get a Discord Bot Token:</strong><br>
+                1. Go to <a href="https://discord.com/developers/applications" target="_blank" style="color:var(--accent)">Discord Developer Portal</a><br>
+                2. Click <strong>New Application</strong>, give it a name<br>
+                3. Go to <strong>Bot</strong> tab, click <strong>Reset Token</strong>, copy it<br>
+                4. Go to <strong>OAuth2 &rarr; URL Generator</strong>, select <code>bot</code> scope + permissions, invite to your server
+              </div>
               <div class="form-group">
                 <label>Bot Token <span class="req">*</span></label>
                 <input type="password" id="dc-token" placeholder="MTIz..." autocomplete="off">
-                <span class="hint">From <a href="https://discord.com/developers/applications" target="_blank">Developer Portal</a> &rarr; Bot &rarr; Token</span>
               </div>
               <div class="form-group">
                 <label>Server ID <span class="opt">(optional)</span></label>
@@ -147,10 +153,16 @@
           </div>
           <div class="channel-body" id="ch-whatsapp-body">
             <div class="ch-credentials">
+              <div class="ch-howto" style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; font-size:0.85rem; line-height:1.5;">
+                <strong>How to set up WhatsApp Cloud API:</strong><br>
+                1. Go to <a href="https://developers.facebook.com/" target="_blank" style="color:var(--accent)">Meta for Developers</a>, create an app<br>
+                2. Add <strong>WhatsApp</strong> product to your app<br>
+                3. In WhatsApp &rarr; <strong>API Setup</strong>, find <strong>Phone Number ID</strong> and <strong>Temporary Access Token</strong><br>
+                4. Copy both values and paste below
+              </div>
               <div class="form-group">
                 <label>Phone Number ID <span class="req">*</span></label>
                 <input type="text" id="wa-phone" placeholder="15550123456">
-                <span class="hint">From <a href="https://developers.facebook.com/" target="_blank">Meta Business Suite</a></span>
               </div>
               <div class="form-group">
                 <label>Access Token <span class="req">*</span></label>
@@ -174,10 +186,16 @@
           </div>
           <div class="channel-body" id="ch-slack-body">
             <div class="ch-credentials">
+              <div class="ch-howto" style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; font-size:0.85rem; line-height:1.5;">
+                <strong>How to get a Slack Bot Token:</strong><br>
+                1. Go to <a href="https://api.slack.com/apps" target="_blank" style="color:var(--accent)">Slack API Apps</a>, click <strong>Create New App</strong><br>
+                2. Choose <strong>From scratch</strong>, name it, select workspace<br>
+                3. Go to <strong>OAuth &amp; Permissions</strong>, add scopes: <code>chat:write</code>, <code>channels:history</code>, <code>channels:read</code><br>
+                4. Click <strong>Install to Workspace</strong>, copy the <strong>Bot User OAuth Token</strong> (starts with <code>xoxb-</code>)
+              </div>
               <div class="form-group">
                 <label>Bot Token <span class="req">*</span></label>
                 <input type="password" id="sl-token" placeholder="xoxb-..." autocomplete="off">
-                <span class="hint">From <a href="https://api.slack.com/apps" target="_blank">Slack Apps</a> &rarr; OAuth &amp; Permissions</span>
               </div>
               <div class="form-group">
                 <label>Signing Secret <span class="opt">(optional)</span></label>
@@ -260,6 +278,14 @@
           </div>
           <div class="channel-body" id="ch-email-body">
             <div class="ch-credentials">
+              <div class="ch-howto" style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; font-size:0.85rem; line-height:1.5;">
+                <strong>How to set up Email (Gmail example):</strong><br>
+                1. Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--accent)">Google App Passwords</a> (requires 2FA enabled)<br>
+                2. Create an app password, copy the 16-character code<br>
+                3. Host: <code>smtp.gmail.com</code>, Port: <code>587</code><br>
+                4. Enter your Gmail and the app password below<br>
+                <em style="opacity:0.7">Other providers: Outlook (smtp.office365.com:587), Yandex (smtp.yandex.ru:465)</em>
+              </div>
               <div class="form-row">
                 <div class="form-group">
                   <label>SMTP Host <span class="req">*</span></label>
