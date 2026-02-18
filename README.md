@@ -1,6 +1,44 @@
-# TaskPilot
+<p align="center">
+  <h1 align="center">TaskPilot</h1>
+  <p align="center">Security-first AI agent framework</p>
+</p>
 
-Secure AI agent framework with built-in safety system, skill-based access control, approval workflows, SQLite history, and one-click launch. TypeScript/Node.js.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/TypeScript-5.3+-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white" alt="Node.js 18+">
+  <img src="https://img.shields.io/badge/LLM_Providers-16+-orange" alt="16+ LLM Providers">
+</p>
+
+AI agents that **can't** nuke your system. Built-in command security, LLM-powered explanations, skill-based access control, approval workflows, encrypted settings, and one-click launch.
+
+**~2,000 lines of TypeScript** — small enough to read in an afternoon. Small enough to audit.
+
+<!-- TODO: Add GIF demo here before launch -->
+<!-- ![TaskPilot Demo](docs/demo.gif) -->
+
+### Highlights
+
+- **Command Security** — dangerous commands (rm -rf, format, shutdown) are blocked before execution
+- **LLM Explanations** — every command is explained in plain language before you approve it
+- **Skill-Based Access** — 4 tiers from read-only web search to full system access
+- **16+ LLM Providers** — OpenAI, Anthropic, Groq, Ollama (local), and more
+- **Zero Config** — SQLite database, one-click launch, encrypted API key storage
+- **Localhost Only** — no cloud, no telemetry, your data stays on your machine
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/NexTryApp/TaskPilot.git
+cd TaskPilot
+npm install
+npx tsx web/server.ts
+# Open http://localhost:4242
+```
+
+Or double-click `start.bat` (Windows) / `./start.sh` (Linux/macOS).
 
 ---
 
@@ -50,7 +88,7 @@ The launcher will:
 
 ```powershell
 # 1. Clone the repository
-git clone https://github.com/nicekid1/TaskPilot.git
+git clone https://github.com/NexTryApp/TaskPilot.git
 cd TaskPilot
 
 # 2. Install dependencies
@@ -67,7 +105,7 @@ npx tsx web/server.ts
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/nicekid1/TaskPilot.git
+git clone https://github.com/NexTryApp/TaskPilot.git
 cd TaskPilot
 
 # 2. Install dependencies
@@ -85,7 +123,7 @@ npx tsx web/server.ts
 ### Option C: Docker (recommended for isolation)
 
 ```bash
-git clone https://github.com/nicekid1/TaskPilot.git
+git clone https://github.com/NexTryApp/TaskPilot.git
 cd TaskPilot
 docker compose up --build
 # Open http://localhost:4242
@@ -144,7 +182,7 @@ TaskPilot's core differentiator is the multi-layered security system that preven
 
 When a command triggers WARN level:
 1. Agent pauses execution
-2. UI shows a modal with the command and explanation (Russian + English)
+2. UI shows a modal with the command and LLM-generated explanation
 3. 60-second countdown timer
 4. User clicks **Approve** or **Deny**
 5. If timeout — automatic denial
@@ -162,7 +200,7 @@ Every command the agent executes is explained in plain human language — both s
 
 - **Quick Explain**: ~30 common safe commands (ls, cat, grep, git) — instant, no LLM call
 - **Full Explain**: All other commands — LLM analyzes risk, reversibility, and consequences
-- **Bilingual**: Explanations in Russian and English
+- **Multilingual**: Explanations in 13 languages (English, Russian, Spanish, Chinese, etc.)
 - **Non-blocking**: Safe command explanations run async, don't slow down the agent
 
 ### Security Audit
@@ -211,7 +249,6 @@ Create `.md` files in `skills/` directory with YAML frontmatter:
 ---
 name: My Custom Skill
 description: What this skill does
-descriptionRu: Description in Russian
 icon: "wrench"
 securityLevel: moderate
 allowedTools: [browser_open, browser_search, terminal_run]
@@ -254,12 +291,12 @@ API key is **encrypted with AES-256-GCM** before storage.
 | **Google Gemini** | `gemini-2.5-pro`, `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` |
 | **DeepSeek** | `deepseek-chat`, `deepseek-reasoner` | `https://api.deepseek.com/v1` |
 | **xAI** | `grok-3`, `grok-3-mini`, `grok-2` | `https://api.x.ai/v1` |
-| **Moonshot (Kimi)** | `kimi-k2`, `moonshot-v1-128k` | `https://api.moonshot.cn/v1` |
-| **Groq** | `llama-3.3-70b`, `mixtral-8x7b` | `https://api.groq.com/openai/v1` |
+| **Moonshot (Kimi)** | `kimi-k2`, `moonshot-v1-128k` | `https://api.moonshot.ai/v1` |
+| **Groq** | `llama-3.3-70b-versatile`, `mistral-saba-24b`, `gemma2-9b-it` | `https://api.groq.com/openai/v1` |
 | **Mistral** | `mistral-large`, `mistral-small`, `codestral` | `https://api.mistral.ai/v1` |
 | **Together** | `Llama-3.3-70B`, `Qwen2.5-72B` | `https://api.together.xyz/v1` |
 | **MiniMax** | `MiniMax-M2.1`, `MiniMax-Text-01` | `https://api.minimax.chat/v1` |
-| **Venice AI** | `llama-3.3-70b`, `claude-opus-45` | `https://api.venice.ai/api/v1` |
+| **Venice AI** | Dynamic model list | `https://api.venice.ai/api/v1` |
 | **Qwen (Alibaba)** | `qwen-plus`, `qwen-turbo`, `qwen-max` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | **GLM (Zhipu)** | `glm-4-plus`, `glm-4-flash` | `https://open.bigmodel.cn/api/paas/v4` |
 | **Amazon Bedrock** | `claude-sonnet-4`, `llama3-70b` | `https://bedrock-runtime.*.amazonaws.com` |
@@ -376,8 +413,8 @@ TaskPilot/
 | **Context Window** | Sliding window + auto-summary |
 | **Token Budget** | Per-run token limit tracking |
 | **Docker Sandbox** | Isolated container for terminal commands |
-| **15+ LLM Providers** | Any OpenAI-compatible API |
-| **Bilingual UI** | Russian + English interface |
+| **16+ LLM Providers** | Any OpenAI-compatible API |
+| **Multilingual** | Command explanations in 13 languages |
 
 ---
 
@@ -403,7 +440,7 @@ TaskPilot is built on the OpenClaw foundation but adds enterprise-grade security
 | **Security Audit** | `security-audit.ts` — project-wide scanner for secrets and misconfigurations | None |
 | **Tool Filtering** | LLM only sees tools it can actually use (filtered by skill policy) | All tools visible regardless |
 | **LLM Providers** | 15+ (OpenAI, Anthropic, Gemini, DeepSeek, xAI, Ollama, and more) | Same |
-| **License** | Source Available + CLA + Patent Grant | MIT |
+| **License** | MIT | MIT |
 | **Codebase** | Independent code, own brand | Original |
 
 **Key difference**: TaskPilot is designed for non-technical users. Every command is explained in plain human language. Data never leaves your machine unprotected — PII scrubber strips secrets before API calls, prompt injection is detected and blocked, and output is monitored for leaks.
@@ -420,10 +457,14 @@ TaskPilot is built on the OpenClaw foundation but adds enterprise-grade security
 
 ---
 
+## Contributing
+
+Contributions are welcome! Feel free to open issues or pull requests.
+
+Please check the [Good First Issues](../../issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for a place to start.
+
+---
+
 ## License
 
-**TaskPilot Source Available License v1.0** — free use (including commercial) with mandatory visible attribution:
-
-> Powered by TaskPilot (github.com/NexTryApp/TaskPilot)
-
-Includes CLA (contributions licensed under same terms) and Patent Grant. Details: [LICENSE](./LICENSE).
+[MIT](./LICENSE) — free to use, modify, and distribute.
