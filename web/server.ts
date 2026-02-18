@@ -116,12 +116,17 @@ interface ToolMeta {
 const TOOL_CATALOG: ToolMeta[] = [
   { name: 'telegram_send', description: 'Send a message via Telegram bot', platform: 'telegram', platformLabel: 'Telegram', icon: 'telegram' },
   { name: 'telegram_read', description: 'Read latest messages from a Telegram chat', platform: 'telegram', platformLabel: 'Telegram', icon: 'telegram' },
+  { name: 'discord_send', description: 'Send a message to a Discord channel', platform: 'discord', platformLabel: 'Discord', icon: 'discord' },
+  { name: 'discord_read', description: 'Read messages from a Discord channel', platform: 'discord', platformLabel: 'Discord', icon: 'discord' },
+  { name: 'whatsapp_send', description: 'Send a WhatsApp message', platform: 'whatsapp', platformLabel: 'WhatsApp', icon: 'whatsapp' },
+  { name: 'slack_send', description: 'Send a message to Slack', platform: 'slack', platformLabel: 'Slack', icon: 'slack' },
+  { name: 'slack_read', description: 'Read messages from a Slack channel', platform: 'slack', platformLabel: 'Slack', icon: 'slack' },
   { name: 'browser_open', description: 'Open a URL in the browser and get page content', platform: 'chrome', platformLabel: 'Chrome Browser', icon: 'chrome' },
   { name: 'browser_search', description: 'Search the web via browser', platform: 'chrome', platformLabel: 'Chrome Browser', icon: 'chrome' },
   { name: 'terminal_run', description: 'Execute a command in the terminal', platform: 'terminal', platformLabel: 'Terminal', icon: 'terminal' },
   { name: 'create_task', description: 'Create a task in the task manager', platform: 'task-manager', platformLabel: 'Task Manager', icon: 'tasks' },
   { name: 'get_weather', description: 'Get current weather for a city', platform: 'weather-api', platformLabel: 'Weather API', icon: 'api' },
-  { name: 'send_email', description: 'Send an email', platform: 'email', platformLabel: 'Email', icon: 'email' },
+  { name: 'send_email', description: 'Send an email via SMTP', platform: 'email', platformLabel: 'Email', icon: 'email' },
 ];
 
 // Map tool name → workspace info
@@ -577,12 +582,13 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
     });
   }
 
+  // --- Task Manager: real SQLite storage ---
   if (enabledTools.includes('create_task')) {
     registry.register({
       name: 'create_task',
       definition: {
         name: 'create_task',
-        description: 'Create a new task in the task manager with title and optional steps.',
+        description: 'Create a new task in the task manager with title and optional steps. Tasks are persisted in the database.',
         parameters: {
           title: { type: 'string', description: 'Task title' },
           steps: { type: 'array', description: 'List of subtask steps', items: { type: 'string' } },
@@ -590,59 +596,270 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
         },
       },
       async execute(args, context) {
-        await delay(500);
-        return {
-          id: `task_${Date.now()}`,
-          title: args['title'],
-          steps: args['steps'] ?? [],
-          priority: args['priority'] ?? 'medium',
-          created: true,
-          createdBy: context?.principal.id ?? 'web-user',
-        };
+        const taskId = `task_${Date.now()}`;
+        const title = String(args['title'] || 'Untitled');
+        const steps = (args['steps'] as string[]) ?? [];
+        const priority = String(args['priority'] || 'medium');
+        const createdBy = context?.principal.id ?? 'web-user';
+
+        // Store in DB as a setting (lightweight task storage)
+        const task = { id: taskId, title, steps, priority, createdBy, createdAt: new Date().toISOString(), done: false };
+        const tasks = JSON.parse(repo.getSetting('tasks') || '[]');
+        tasks.push(task);
+        repo.setSetting('tasks', JSON.stringify(tasks));
+
+        return { ...task, created: true, totalTasks: tasks.length };
       },
     });
   }
 
+  // --- Weather: real API via wttr.in (free, no API key needed) ---
   if (enabledTools.includes('get_weather')) {
     registry.register({
       name: 'get_weather',
       definition: {
         name: 'get_weather',
-        description: 'Get current weather for a city.',
-        parameters: { city: { type: 'string', description: 'City name' } },
+        description: 'Get current weather for a city. Uses real weather data.',
+        parameters: { city: { type: 'string', description: 'City name (e.g. Moscow, London, Tokyo)' } },
       },
       async execute(args) {
-        await delay(700);
-        const city = String(args['city'] ?? 'Unknown');
-        const temps: Record<string, number> = { Moscow: -5, London: 8, Tokyo: 14, 'New York': 2, Berlin: 3, Paris: 6 };
-        const temp = temps[city] ?? Math.floor(Math.random() * 30 - 5);
-        const conditions = ['sunny', 'cloudy', 'rain', 'snow', 'windy', 'partly cloudy'];
-        const condition = conditions[Math.floor(Math.random() * conditions.length)];
-        return { city, temp, condition, unit: 'C', humidity: Math.floor(Math.random() * 60 + 30) + '%' };
+        const city = String(args['city'] ?? 'London');
+        try {
+          const resp = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, {
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!resp.ok) return { error: `Weather API returned ${resp.status}` };
+          const data = await resp.json() as {
+            current_condition?: Array<{
+              temp_C?: string; humidity?: string; weatherDesc?: Array<{ value?: string }>;
+              windspeedKmph?: string; FeelsLikeC?: string;
+            }>;
+          };
+          const cc = data.current_condition?.[0];
+          if (!cc) return { error: 'No weather data available' };
+          return {
+            city,
+            temp: Number(cc.temp_C),
+            feelsLike: Number(cc.FeelsLikeC),
+            condition: cc.weatherDesc?.[0]?.value || 'unknown',
+            humidity: `${cc.humidity}%`,
+            wind: `${cc.windspeedKmph} km/h`,
+            unit: 'C',
+          };
+        } catch (err: unknown) {
+          return { error: `Weather fetch failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
       },
     });
   }
+
+  // --- Email: real SMTP via Nodemailer ---
+  const emailCfg = channelConfig?.email as Record<string, unknown> | undefined;
 
   if (enabledTools.includes('send_email')) {
     registry.register({
       name: 'send_email',
       definition: {
         name: 'send_email',
-        description: 'Send an email to a recipient.',
+        description: 'Send a real email via SMTP. Requires email channel credentials (host, port, user, password).',
         parameters: {
           to: { type: 'string', description: 'Recipient email address' },
           subject: { type: 'string', description: 'Email subject' },
-          body: { type: 'string', description: 'Email body text' },
+          body: { type: 'string', description: 'Email body text (plain text or HTML)' },
         },
       },
       async execute(args) {
-        await delay(600);
-        return {
-          sent: true,
-          to: args['to'],
-          subject: args['subject'],
-          timestamp: new Date().toISOString(),
-        };
+        if (!emailCfg?.host || !emailCfg?.user || !emailCfg?.pass) {
+          return { error: 'Email not configured. Enter SMTP credentials in the Email channel settings.' };
+        }
+        try {
+          const nodemailer = await import('nodemailer');
+          const transporter = nodemailer.createTransport({
+            host: String(emailCfg.host),
+            port: Number(emailCfg.port) || 587,
+            secure: Number(emailCfg.port) === 465,
+            auth: { user: String(emailCfg.user), pass: String(emailCfg.pass) },
+          });
+          const info = await transporter.sendMail({
+            from: String(emailCfg.user),
+            to: String(args['to']),
+            subject: String(args['subject'] || ''),
+            text: String(args['body'] || ''),
+          });
+          return { sent: true, to: args['to'], subject: args['subject'], messageId: info.messageId, timestamp: new Date().toISOString() };
+        } catch (err: unknown) {
+          return { error: `Email send failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      },
+    });
+  }
+
+  // --- Discord: real Bot API ---
+  const dcCfg = channelConfig?.discord as Record<string, string> | undefined;
+  const DC_TOKEN = dcCfg?.botToken || '';
+  const DC_API = 'https://discord.com/api/v10';
+
+  if (enabledTools.includes('discord_send')) {
+    registry.register({
+      name: 'discord_send',
+      definition: {
+        name: 'discord_send',
+        description: 'Send a message to a Discord channel via Bot API.',
+        parameters: {
+          channelId: { type: 'string', description: 'Discord channel ID (number)' },
+          text: { type: 'string', description: 'Message text to send' },
+        },
+      },
+      async execute(args) {
+        if (!DC_TOKEN) return { error: 'Discord bot token not configured. Enter it in the Discord channel settings.' };
+        try {
+          const resp = await fetch(`${DC_API}/channels/${args['channelId']}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Bot ${DC_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: String(args['text']) }),
+          });
+          const data = await resp.json() as { id?: string; content?: string; message?: string };
+          if (!resp.ok) return { error: `Discord API error: ${data.message || resp.status}` };
+          return { sent: true, channelId: args['channelId'], messageId: data.id, text: data.content };
+        } catch (err: unknown) {
+          return { error: `Discord send failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      },
+    });
+  }
+
+  if (enabledTools.includes('discord_read')) {
+    registry.register({
+      name: 'discord_read',
+      definition: {
+        name: 'discord_read',
+        description: 'Read recent messages from a Discord channel.',
+        parameters: {
+          channelId: { type: 'string', description: 'Discord channel ID' },
+          limit: { type: 'number', description: 'Number of messages (default 10, max 50)' },
+        },
+      },
+      async execute(args) {
+        if (!DC_TOKEN) return { error: 'Discord bot token not configured.' };
+        const limit = Math.min(Number(args['limit']) || 10, 50);
+        try {
+          const resp = await fetch(`${DC_API}/channels/${args['channelId']}/messages?limit=${limit}`, {
+            headers: { Authorization: `Bot ${DC_TOKEN}` },
+          });
+          const data = await resp.json() as Array<{ id: string; content: string; author: { username: string }; timestamp: string }> | { message?: string };
+          if (!resp.ok) return { error: `Discord API error: ${(data as { message?: string }).message || resp.status}` };
+          return {
+            count: (data as Array<unknown>).length,
+            messages: (data as Array<{ id: string; content: string; author: { username: string }; timestamp: string }>).map(m => ({
+              id: m.id, author: m.author.username, text: m.content, timestamp: m.timestamp,
+            })),
+          };
+        } catch (err: unknown) {
+          return { error: `Discord read failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      },
+    });
+  }
+
+  // --- WhatsApp: real Cloud API ---
+  const waCfg = channelConfig?.whatsapp as Record<string, string> | undefined;
+  const WA_PHONE_ID = waCfg?.phoneNumberId || '';
+  const WA_TOKEN = waCfg?.accessToken || '';
+
+  if (enabledTools.includes('whatsapp_send')) {
+    registry.register({
+      name: 'whatsapp_send',
+      definition: {
+        name: 'whatsapp_send',
+        description: 'Send a WhatsApp message via Meta Cloud API.',
+        parameters: {
+          to: { type: 'string', description: 'Recipient phone number with country code (e.g. 15551234567)' },
+          text: { type: 'string', description: 'Message text' },
+        },
+      },
+      async execute(args) {
+        if (!WA_PHONE_ID || !WA_TOKEN) return { error: 'WhatsApp not configured. Enter Phone Number ID and Access Token in WhatsApp channel settings.' };
+        try {
+          const resp = await fetch(`https://graph.facebook.com/v18.0/${WA_PHONE_ID}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: String(args['to']),
+              type: 'text',
+              text: { body: String(args['text']) },
+            }),
+          });
+          const data = await resp.json() as { messages?: Array<{ id: string }>; error?: { message: string } };
+          if (!resp.ok) return { error: `WhatsApp API error: ${data.error?.message || resp.status}` };
+          return { sent: true, to: args['to'], messageId: data.messages?.[0]?.id, timestamp: new Date().toISOString() };
+        } catch (err: unknown) {
+          return { error: `WhatsApp send failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      },
+    });
+  }
+
+  // --- Slack: real Web API ---
+  const slCfg = channelConfig?.slack as Record<string, string> | undefined;
+  const SL_TOKEN = slCfg?.botToken || '';
+
+  if (enabledTools.includes('slack_send')) {
+    registry.register({
+      name: 'slack_send',
+      definition: {
+        name: 'slack_send',
+        description: 'Send a message to a Slack channel via Bot API.',
+        parameters: {
+          channel: { type: 'string', description: 'Slack channel ID (e.g. C01234567) or channel name (#general)' },
+          text: { type: 'string', description: 'Message text' },
+        },
+      },
+      async execute(args) {
+        if (!SL_TOKEN) return { error: 'Slack bot token not configured. Enter it in the Slack channel settings.' };
+        try {
+          const resp = await fetch('https://slack.com/api/chat.postMessage', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${SL_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel: String(args['channel']), text: String(args['text']) }),
+          });
+          const data = await resp.json() as { ok: boolean; ts?: string; channel?: string; error?: string };
+          if (!data.ok) return { error: `Slack API error: ${data.error}` };
+          return { sent: true, channel: data.channel, ts: data.ts, text: args['text'] };
+        } catch (err: unknown) {
+          return { error: `Slack send failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      },
+    });
+  }
+
+  if (enabledTools.includes('slack_read')) {
+    registry.register({
+      name: 'slack_read',
+      definition: {
+        name: 'slack_read',
+        description: 'Read recent messages from a Slack channel.',
+        parameters: {
+          channel: { type: 'string', description: 'Slack channel ID (e.g. C01234567)' },
+          limit: { type: 'number', description: 'Number of messages (default 10)' },
+        },
+      },
+      async execute(args) {
+        if (!SL_TOKEN) return { error: 'Slack bot token not configured.' };
+        const limit = Math.min(Number(args['limit']) || 10, 50);
+        try {
+          const resp = await fetch(`https://slack.com/api/conversations.history?channel=${args['channel']}&limit=${limit}`, {
+            headers: { Authorization: `Bearer ${SL_TOKEN}` },
+          });
+          const data = await resp.json() as { ok: boolean; messages?: Array<{ text: string; user?: string; ts: string }>; error?: string };
+          if (!data.ok) return { error: `Slack API error: ${data.error}` };
+          return {
+            count: data.messages?.length || 0,
+            messages: (data.messages || []).map(m => ({ user: m.user, text: m.text, ts: m.ts })),
+          };
+        } catch (err: unknown) {
+          return { error: `Slack read failed: ${err instanceof Error ? err.message : String(err)}` };
+        }
       },
     });
   }
@@ -840,9 +1057,9 @@ app.post('/api/run', requireAuth, async (req, res) => {
   if (selectedSkill.allowedTools.includes('*')) {
     // All tools allowed by skill — but still filter by what channels are enabled
     if (channels?.telegram) { enabledToolNames.push('telegram_send', 'telegram_read'); }
-    if (channels?.discord) { enabledToolNames.push('telegram_send', 'telegram_read'); }
-    if (channels?.whatsapp) { enabledToolNames.push('telegram_send'); }
-    if (channels?.slack) { enabledToolNames.push('telegram_send'); }
+    if (channels?.discord) { enabledToolNames.push('discord_send', 'discord_read'); }
+    if (channels?.whatsapp) { enabledToolNames.push('whatsapp_send'); }
+    if (channels?.slack) { enabledToolNames.push('slack_send', 'slack_read'); }
     if (channels?.browser) { enabledToolNames.push('browser_open', 'browser_search'); }
     if (channels?.terminal) { enabledToolNames.push('terminal_run'); }
     if (channels?.email) { enabledToolNames.push('send_email'); }

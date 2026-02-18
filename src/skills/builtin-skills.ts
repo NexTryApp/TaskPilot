@@ -15,7 +15,7 @@ export const BUILTIN_SKILLS: Map<string, SkillDefinition> = new Map([
     icon: 'search',
     securityLevel: 'safe',
     allowedTools: ['browser_open', 'browser_search', 'create_task', 'get_weather'],
-    deniedTools: ['terminal_run', 'send_email', 'telegram_send', 'telegram_read'],
+    deniedTools: ['terminal_run', 'send_email', 'telegram_send', 'telegram_read', 'discord_send', 'discord_read', 'whatsapp_send', 'slack_send', 'slack_read'],
     safeBinsOnly: true,
     safetyRules: [
       'You can ONLY browse the web and search for information.',
@@ -34,7 +34,7 @@ export const BUILTIN_SKILLS: Map<string, SkillDefinition> = new Map([
     icon: 'tasks',
     securityLevel: 'safe',
     allowedTools: ['create_task', 'get_weather', 'browser_search', 'browser_open'],
-    deniedTools: ['terminal_run', 'send_email', 'telegram_send', 'telegram_read'],
+    deniedTools: ['terminal_run', 'send_email', 'telegram_send', 'telegram_read', 'discord_send', 'discord_read', 'whatsapp_send', 'slack_send', 'slack_read'],
     safeBinsOnly: true,
     safetyRules: [
       'You can create tasks, look up weather, and search the web.',
@@ -52,7 +52,7 @@ export const BUILTIN_SKILLS: Map<string, SkillDefinition> = new Map([
     icon: 'code',
     securityLevel: 'moderate',
     allowedTools: ['terminal_run', 'browser_open', 'browser_search', 'create_task', 'get_weather'],
-    deniedTools: ['send_email', 'telegram_send', 'telegram_read'],
+    deniedTools: ['send_email', 'telegram_send', 'telegram_read', 'discord_send', 'discord_read', 'whatsapp_send', 'slack_send', 'slack_read'],
     allowedCommands: [
       '^(cat|head|tail|grep|find|ls|dir|tree|pwd)\\b',
       '^(git|node|npm|npx|python|python3|pip|tsc|pnpm|yarn|bun)\\b',
@@ -97,7 +97,7 @@ export const BUILTIN_SKILLS: Map<string, SkillDefinition> = new Map([
       'Prefer non-destructive alternatives (e.g., mv to trash instead of rm).',
       'Never run commands that could damage the system without explicit user confirmation.',
     ],
-    requireApprovalFor: ['terminal_run', 'send_email'],
+    requireApprovalFor: ['terminal_run', 'send_email', 'whatsapp_send'],
     body: '',
   }],
 
