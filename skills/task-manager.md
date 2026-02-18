@@ -1,7 +1,6 @@
 ---
 name: task-manager
 description: Create tasks, check weather, search — no terminal or messaging
-descriptionRu: "Создание задач, погода, поиск — без терминала и мессенджеров"
 icon: tasks
 securityLevel: safe
 allowedTools:

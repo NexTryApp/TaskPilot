@@ -1,7 +1,6 @@
 ---
 name: sys-admin
 description: Full system access with danger warnings — for experienced users
-descriptionRu: "Полный доступ к системе с предупреждениями — для опытных пользователей"
 icon: terminal
 securityLevel: full
 allowedTools:

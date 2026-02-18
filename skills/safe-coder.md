@@ -1,7 +1,6 @@
 ---
 name: safe-coder
 description: Code editing and analysis — terminal with restrictions, no file deletion
-descriptionRu: "Программирование — терминал с ограничениями, без удаления файлов"
 icon: code
 securityLevel: moderate
 allowedTools:

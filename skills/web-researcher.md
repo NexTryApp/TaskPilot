@@ -1,7 +1,6 @@
 ---
 name: web-researcher
 description: Web browsing and search only — no terminal, no email, no messaging
-descriptionRu: "Только поиск в интернете — без терминала, без почты, без мессенджеров"
 icon: search
 securityLevel: safe
 allowedTools:
