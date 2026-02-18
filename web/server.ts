@@ -43,6 +43,32 @@ const execAsync = promisify(execCb);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- Browser Automation (Playwright singleton) ---
+import { chromium, type Browser, type Page } from 'playwright';
+
+let _browser: Browser | null = null;
+let _page: Page | null = null;
+
+async function getBrowserPage(): Promise<Page> {
+  if (_page && !_page.isClosed()) return _page;
+  if (_browser) { try { await _browser.close(); } catch {} }
+  _browser = await chromium.launch({
+    channel: 'chrome',  // use installed Chrome
+    headless: false,     // visible browser
+    args: ['--start-maximized'],
+  });
+  const context = await _browser.newContext({ viewport: null });
+  _page = await context.newPage();
+  return _page;
+}
+
+async function closeBrowser(): Promise<void> {
+  if (_page && !_page.isClosed()) { try { await _page.close(); } catch {} }
+  if (_browser) { try { await _browser.close(); } catch {} }
+  _page = null;
+  _browser = null;
+}
+
 import { randomBytes } from 'crypto';
 
 const app = express();
@@ -123,6 +149,11 @@ const TOOL_CATALOG: ToolMeta[] = [
   { name: 'slack_read', description: 'Read messages from a Slack channel', platform: 'slack', platformLabel: 'Slack', icon: 'slack' },
   { name: 'browser_open', description: 'Open a URL in the browser and get page content', platform: 'chrome', platformLabel: 'Chrome Browser', icon: 'chrome' },
   { name: 'open_url', description: 'Open a URL in the local browser (Chrome/Firefox/etc.)', platform: 'chrome', platformLabel: 'Local Browser', icon: 'chrome' },
+  { name: 'browser_go', description: 'Navigate to a URL in a real Chrome browser', platform: 'chrome', platformLabel: 'Browser Automation', icon: 'chrome' },
+  { name: 'browser_click', description: 'Click a button or link on the current page', platform: 'chrome', platformLabel: 'Browser Automation', icon: 'chrome' },
+  { name: 'browser_type', description: 'Type text into an input field', platform: 'chrome', platformLabel: 'Browser Automation', icon: 'chrome' },
+  { name: 'browser_screenshot', description: 'See what is on the current page', platform: 'chrome', platformLabel: 'Browser Automation', icon: 'chrome' },
+  { name: 'browser_close', description: 'Close the browser window', platform: 'chrome', platformLabel: 'Browser Automation', icon: 'chrome' },
   { name: 'browser_search', description: 'Search the web via browser', platform: 'chrome', platformLabel: 'Chrome Browser', icon: 'chrome' },
   { name: 'terminal_run', description: 'Execute a command in the terminal', platform: 'terminal', platformLabel: 'Terminal', icon: 'terminal' },
   { name: 'create_task', description: 'Create a task in the task manager', platform: 'task-manager', platformLabel: 'Task Manager', icon: 'tasks' },
@@ -501,6 +532,178 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
             }
           });
         });
+      },
+    });
+  }
+
+  // --- BROWSER AUTOMATION (Playwright) ---
+  if (enabledTools.includes('browser_go')) {
+    registry.register({
+      name: 'browser_go',
+      definition: {
+        name: 'browser_go',
+        description: 'Open a real Chrome browser and navigate to a URL. The browser window will be visible on screen. Returns the page title and a text summary of the page content.',
+        parameters: {
+          url: { type: 'string', description: 'Full URL to navigate to (e.g. https://example.com)' },
+        },
+      },
+      async execute(args) {
+        const url = String(args['url'] || '');
+        if (!url) return { error: 'URL is required' };
+        try { new URL(url); } catch { return { error: `Invalid URL: ${url}` }; }
+        try {
+          const page = await getBrowserPage();
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+          const title = await page.title();
+          // Get visible text content (trimmed)
+          const text = await page.evaluate(() => {
+            const el = document.body;
+            return el ? el.innerText.slice(0, 3000) : '';
+          });
+          return { url, title, contentPreview: text, opened: true };
+        } catch (err) {
+          return { url, error: err instanceof Error ? err.message : String(err) };
+        }
+      },
+    });
+  }
+
+  if (enabledTools.includes('browser_click')) {
+    registry.register({
+      name: 'browser_click',
+      definition: {
+        name: 'browser_click',
+        description: 'Click an element on the current page. You can click by visible text content or by CSS selector.',
+        parameters: {
+          text: { type: 'string', description: 'Visible text of the element to click (e.g. "Sign In", "Submit", "Learn More")' },
+          selector: { type: 'string', description: 'CSS selector to click (e.g. "#submit-btn", ".nav-link"). Use this if text matching fails.' },
+        },
+      },
+      async execute(args) {
+        const text = String(args['text'] || '');
+        const selector = String(args['selector'] || '');
+        if (!text && !selector) return { error: 'Provide either text or selector to click' };
+        try {
+          const page = await getBrowserPage();
+          if (text) {
+            // Try clicking by text — first exact, then partial
+            const locator = page.getByText(text, { exact: false }).first();
+            await locator.click({ timeout: 5000 });
+          } else {
+            await page.click(selector, { timeout: 5000 });
+          }
+          // Wait for navigation/content to settle
+          await page.waitForTimeout(1000);
+          const title = await page.title();
+          const currentUrl = page.url();
+          return { clicked: text || selector, currentUrl, title };
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : String(err), hint: 'Element not found or not clickable. Try a different text or CSS selector.' };
+        }
+      },
+    });
+  }
+
+  if (enabledTools.includes('browser_type')) {
+    registry.register({
+      name: 'browser_type',
+      definition: {
+        name: 'browser_type',
+        description: 'Type text into an input field on the current page. Finds the input by placeholder text, label, or CSS selector.',
+        parameters: {
+          text: { type: 'string', description: 'Text to type into the field' },
+          placeholder: { type: 'string', description: 'Placeholder text of the input field (e.g. "Search...", "Enter email")' },
+          selector: { type: 'string', description: 'CSS selector of the input (e.g. "#email", "input[name=q]")' },
+          pressEnter: { type: 'boolean', description: 'Press Enter after typing (default: false)' },
+        },
+      },
+      async execute(args) {
+        const text = String(args['text'] || '');
+        const placeholder = String(args['placeholder'] || '');
+        const selector = String(args['selector'] || '');
+        const pressEnter = Boolean(args['pressEnter']);
+        if (!text) return { error: 'text is required' };
+        if (!placeholder && !selector) return { error: 'Provide either placeholder or selector to find the input' };
+        try {
+          const page = await getBrowserPage();
+          if (placeholder) {
+            const input = page.getByPlaceholder(placeholder, { exact: false }).first();
+            await input.fill(text, { timeout: 5000 });
+            if (pressEnter) await input.press('Enter');
+          } else {
+            await page.fill(selector, text, { timeout: 5000 });
+            if (pressEnter) await page.press(selector, 'Enter');
+          }
+          await page.waitForTimeout(500);
+          return { typed: text, into: placeholder || selector, pressedEnter: pressEnter };
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : String(err), hint: 'Input not found. Try a different placeholder or selector.' };
+        }
+      },
+    });
+  }
+
+  if (enabledTools.includes('browser_screenshot')) {
+    registry.register({
+      name: 'browser_screenshot',
+      definition: {
+        name: 'browser_screenshot',
+        description: 'Take a screenshot of the current browser page and return a text description of what is visible. Use this to see what is on screen.',
+        parameters: {},
+      },
+      async execute() {
+        try {
+          const page = await getBrowserPage();
+          const title = await page.title();
+          const currentUrl = page.url();
+          // Get all visible interactive elements for the agent
+          const elements = await page.evaluate(() => {
+            const items: string[] = [];
+            // Buttons
+            document.querySelectorAll('button, [role="button"], input[type="submit"]').forEach((el) => {
+              const txt = (el as HTMLElement).innerText?.trim() || (el as HTMLInputElement).value?.trim() || '';
+              if (txt) items.push(`[Button] "${txt}"`);
+            });
+            // Links
+            document.querySelectorAll('a[href]').forEach((el) => {
+              const txt = (el as HTMLElement).innerText?.trim() || '';
+              if (txt && txt.length < 80) items.push(`[Link] "${txt}" → ${(el as HTMLAnchorElement).href}`);
+            });
+            // Inputs
+            document.querySelectorAll('input, textarea, select').forEach((el) => {
+              const input = el as HTMLInputElement;
+              const ph = input.placeholder || input.name || input.id || input.type;
+              items.push(`[Input] ${ph} (${input.type || 'text'})`);
+            });
+            return items.slice(0, 50);
+          });
+          // Also get visible text
+          const visibleText = await page.evaluate(() => {
+            return document.body?.innerText?.slice(0, 2000) || '';
+          });
+          return { title, url: currentUrl, interactiveElements: elements, visibleText };
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : String(err) };
+        }
+      },
+    });
+  }
+
+  if (enabledTools.includes('browser_close')) {
+    registry.register({
+      name: 'browser_close',
+      definition: {
+        name: 'browser_close',
+        description: 'Close the browser window.',
+        parameters: {},
+      },
+      async execute() {
+        try {
+          await closeBrowser();
+          return { closed: true };
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : String(err) };
+        }
       },
     });
   }
@@ -1109,7 +1312,7 @@ app.post('/api/run', requireAuth, async (req, res) => {
     if (channels?.browser) { enabledToolNames.push('browser_open', 'browser_search'); }
     if (channels?.terminal) { enabledToolNames.push('terminal_run'); }
     if (channels?.email) { enabledToolNames.push('send_email'); }
-    enabledToolNames.push('create_task', 'get_weather', 'open_url');
+    enabledToolNames.push('create_task', 'get_weather', 'open_url', 'browser_go', 'browser_click', 'browser_type', 'browser_screenshot', 'browser_close');
   } else {
     // Only tools allowed by skill
     enabledToolNames.push(...selectedSkill.allowedTools);
@@ -1544,7 +1747,7 @@ function startTelegramPolling(): void {
         try {
           const enabledToolNames: string[] = [];
           if (skill.allowedTools.includes('*')) {
-            enabledToolNames.push('telegram_send', 'telegram_read', 'browser_open', 'browser_search', 'open_url', 'create_task', 'get_weather');
+            enabledToolNames.push('telegram_send', 'telegram_read', 'browser_open', 'browser_search', 'open_url', 'browser_go', 'browser_click', 'browser_type', 'browser_screenshot', 'browser_close', 'create_task', 'get_weather');
           } else {
             enabledToolNames.push(...skill.allowedTools);
           }
