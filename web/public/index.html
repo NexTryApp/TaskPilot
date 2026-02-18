@@ -323,13 +323,12 @@
 
       <!-- Skill Selector -->
       <div class="section-card">
-        <h3>&#x1F6E1; Agent Skill / &#x041D;&#x0430;&#x0432;&#x044B;&#x043A; &#x0430;&#x0433;&#x0435;&#x043D;&#x0442;&#x0430;</h3>
-        <p class="section-desc">Choose what the agent can do. This controls available tools and security level.<br>
-        &#x0412;&#x044B;&#x0431;&#x0435;&#x0440;&#x0438;&#x0442;&#x0435;, &#x0447;&#x0442;&#x043E; &#x0430;&#x0433;&#x0435;&#x043D;&#x0442; &#x043C;&#x043E;&#x0436;&#x0435;&#x0442; &#x0434;&#x0435;&#x043B;&#x0430;&#x0442;&#x044C;. &#x042D;&#x0442;&#x043E; &#x043E;&#x043F;&#x0440;&#x0435;&#x0434;&#x0435;&#x043B;&#x044F;&#x0435;&#x0442; &#x0434;&#x043E;&#x0441;&#x0442;&#x0443;&#x043F;&#x043D;&#x044B;&#x0435; &#x0438;&#x043D;&#x0441;&#x0442;&#x0440;&#x0443;&#x043C;&#x0435;&#x043D;&#x0442;&#x044B; &#x0438; &#x0443;&#x0440;&#x043E;&#x0432;&#x0435;&#x043D;&#x044C; &#x0431;&#x0435;&#x0437;&#x043E;&#x043F;&#x0430;&#x0441;&#x043D;&#x043E;&#x0441;&#x0442;&#x0438;.</p>
+        <h3>&#x1F6E1; Agent Skill</h3>
+        <p class="section-desc">Choose what the agent can do. This controls available tools and security level.</p>
         <div class="skill-grid" id="skillGrid"></div>
         <div class="security-level-bar" id="securityLevelBar">
           <span class="security-dot safe" id="securityDot"></span>
-          <span id="securityLevelText">Safe / &#x0411;&#x0435;&#x0437;&#x043E;&#x043F;&#x0430;&#x0441;&#x043D;&#x044B;&#x0439;</span>
+          <span id="securityLevelText">Safe</span>
         </div>
       </div>
 
@@ -347,6 +346,25 @@
             <label for="userNotes">Key Notes</label>
             <input type="text" id="userNotes" placeholder="e.g.: I prefer Russian, I'm a designer">
             <span class="hint">Always-on context (preferences, role, language)</span>
+          </div>
+          <div class="form-group">
+            <label for="explanationLanguage">Explanation Language</label>
+            <select id="explanationLanguage">
+              <option value="English" selected>English</option>
+              <option value="Russian">Russian</option>
+              <option value="Spanish">Spanish</option>
+              <option value="French">French</option>
+              <option value="German">German</option>
+              <option value="Chinese">Chinese</option>
+              <option value="Japanese">Japanese</option>
+              <option value="Korean">Korean</option>
+              <option value="Portuguese">Portuguese</option>
+              <option value="Arabic">Arabic</option>
+              <option value="Hindi">Hindi</option>
+              <option value="Turkish">Turkish</option>
+              <option value="Ukrainian">Ukrainian</option>
+            </select>
+            <span class="hint">Security Advisor will explain commands in this language</span>
           </div>
         </div>
         <div class="form-row" style="margin-top: 8px">
@@ -515,9 +533,9 @@ Always confirm before taking destructive actions.</textarea>
 
       <!-- Security Log -->
       <section class="dash-card security-card">
-        <h3>&#x1F6E1; Security Log / &#x0416;&#x0443;&#x0440;&#x043D;&#x0430;&#x043B; &#x0431;&#x0435;&#x0437;&#x043E;&#x043F;&#x0430;&#x0441;&#x043D;&#x043E;&#x0441;&#x0442;&#x0438;</h3>
+        <h3>&#x1F6E1; Security Log</h3>
         <div class="security-feed" id="securityFeed">
-          <div class="feed-placeholder">Security decisions will appear here / &#x0420;&#x0435;&#x0448;&#x0435;&#x043D;&#x0438;&#x044F; &#x0431;&#x0435;&#x0437;&#x043E;&#x043F;&#x0430;&#x0441;&#x043D;&#x043E;&#x0441;&#x0442;&#x0438; &#x043F;&#x043E;&#x044F;&#x0432;&#x044F;&#x0442;&#x0441;&#x044F; &#x0437;&#x0434;&#x0435;&#x0441;&#x044C;</div>
+          <div class="feed-placeholder">Security decisions will appear here</div>
         </div>
       </section>
 
@@ -540,18 +558,18 @@ Always confirm before taking destructive actions.</textarea>
     <div class="approval-modal">
       <div class="approval-header">
         <span class="approval-icon">&#x26A0;&#xFE0F;</span>
-        <h3>Approval Required / &#x0422;&#x0440;&#x0435;&#x0431;&#x0443;&#x0435;&#x0442;&#x0441;&#x044F; &#x043F;&#x043E;&#x0434;&#x0442;&#x0432;&#x0435;&#x0440;&#x0436;&#x0434;&#x0435;&#x043D;&#x0438;&#x0435;</h3>
+        <h3>Approval Required</h3>
       </div>
       <div class="approval-body">
-        <div class="approval-label">&#x041A;&#x043E;&#x043C;&#x0430;&#x043D;&#x0434;&#x0430; / Command:</div>
+        <div class="approval-label">Command:</div>
         <div class="approval-command" id="approvalCommand"></div>
-        <div class="approval-label">&#x041F;&#x043E;&#x0447;&#x0435;&#x043C;&#x0443; / Why:</div>
+        <div class="approval-label">Why:</div>
         <div class="approval-explanation" id="approvalExplanation"></div>
       </div>
       <div class="approval-timer" id="approvalTimer">60s</div>
       <div class="approval-actions">
-        <button class="btn-danger" id="btnDeny">&#x274C; &#x0417;&#x0430;&#x043F;&#x0440;&#x0435;&#x0442;&#x0438;&#x0442;&#x044C; / Deny</button>
-        <button class="btn-approve" id="btnApprove">&#x2705; &#x0420;&#x0430;&#x0437;&#x0440;&#x0435;&#x0448;&#x0438;&#x0442;&#x044C; / Approve</button>
+        <button class="btn-danger" id="btnDeny">&#x274C; Deny</button>
+        <button class="btn-approve" id="btnApprove">&#x2705; Approve</button>
       </div>
     </div>
   </div>

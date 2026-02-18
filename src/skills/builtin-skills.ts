@@ -11,7 +11,6 @@ export const BUILTIN_SKILLS: Map<string, SkillDefinition> = new Map([
   ['web-researcher', {
     name: 'web-researcher',
     description: 'Web browsing and search only — no terminal, no email, no messaging',
-    descriptionRu: 'Только поиск в интернете — без терминала, без почты, без мессенджеров',
     icon: 'search',
     securityLevel: 'safe',
     allowedTools: ['browser_open', 'browser_search', 'create_task', 'get_weather'],
@@ -30,7 +29,6 @@ export const BUILTIN_SKILLS: Map<string, SkillDefinition> = new Map([
   ['task-manager', {
     name: 'task-manager',
     description: 'Create tasks, check weather, search — no terminal or messaging',
-    descriptionRu: 'Создание задач, погода, поиск — без терминала и мессенджеров',
     icon: 'tasks',
     securityLevel: 'safe',
     allowedTools: ['create_task', 'get_weather', 'browser_search', 'browser_open'],
@@ -48,7 +46,6 @@ export const BUILTIN_SKILLS: Map<string, SkillDefinition> = new Map([
   ['safe-coder', {
     name: 'safe-coder',
     description: 'Code editing and analysis — terminal with restrictions, no file deletion',
-    descriptionRu: 'Программирование — терминал с ограничениями, без удаления файлов',
     icon: 'code',
     securityLevel: 'moderate',
     allowedTools: ['terminal_run', 'browser_open', 'browser_search', 'create_task', 'get_weather'],
@@ -85,7 +82,6 @@ export const BUILTIN_SKILLS: Map<string, SkillDefinition> = new Map([
   ['sys-admin', {
     name: 'sys-admin',
     description: 'Full system access with danger warnings — for experienced users',
-    descriptionRu: 'Полный доступ к системе с предупреждениями — для опытных пользователей',
     icon: 'terminal',
     securityLevel: 'full',
     allowedTools: ['*'],

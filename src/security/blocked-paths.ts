@@ -51,7 +51,7 @@ const BLOCKED_PATHS: Record<Platform, string[]> = {
 export function containsBlockedPath(
   command: string,
   platform: Platform
-): { blocked: boolean; path: string; explanation: string; explanationRu: string } | null {
+): { blocked: boolean; path: string; explanation: string } | null {
   const paths = BLOCKED_PATHS[platform] || BLOCKED_PATHS.linux;
   const normalizedCmd = command.toLowerCase().replace(/\\/g, '/');
 
@@ -74,7 +74,6 @@ export function containsBlockedPath(
           blocked: true,
           path: blockedPath,
           explanation: `Command accesses sensitive path: ${blockedPath}`,
-          explanationRu: `Команда обращается к чувствительному пути: ${blockedPath}`,
         };
       }
       continue;
@@ -86,7 +85,6 @@ export function containsBlockedPath(
           blocked: true,
           path: blockedPath,
           explanation: `Command accesses sensitive path: ${blockedPath}`,
-          explanationRu: `Команда обращается к чувствительному пути: ${blockedPath}`,
         };
       }
     }

@@ -886,7 +886,6 @@ app.get('/api/skills', (_req, res) => {
     key,
     name: skill.name,
     description: skill.description,
-    descriptionRu: skill.descriptionRu,
     icon: skill.icon,
     securityLevel: skill.securityLevel,
     allowedTools: skill.allowedTools,
@@ -1046,6 +1045,7 @@ app.post('/api/run', requireAuth, async (req, res) => {
     agentName,
     // REMOVED: accessPolicy (replaced by skill-based policy)
     skill: skillName,  // NEW: skill selection
+    explanationLanguage,  // Language for Security Advisor explanations
   } = req.body;
 
   // Resolve skill (default: web-researcher)
@@ -1099,7 +1099,6 @@ app.post('/api/run', requireAuth, async (req, res) => {
         toolName: approval.toolName,
         args: approval.args,
         reason: approval.decision.reason,
-        reasonRu: approval.decision.reasonRu,
         checks: approval.decision.checks,
         expiresAt: approval.expiresAt,
       });
@@ -1121,7 +1120,6 @@ app.post('/api/run', requireAuth, async (req, res) => {
         command: warnCmd,
         toolName: approval.toolName,
         explanation: approval.decision.reason,
-        explanationRu: approval.decision.reasonRu,
         category: approval.decision.checks[0]?.category,
       });
     },
@@ -1151,7 +1149,6 @@ app.post('/api/run', requireAuth, async (req, res) => {
     skill: {
       name: selectedSkill.name,
       description: selectedSkill.description,
-      descriptionRu: selectedSkill.descriptionRu,
       securityLevel: selectedSkill.securityLevel,
     },
     tools: allTools,
@@ -1200,7 +1197,7 @@ app.post('/api/run', requireAuth, async (req, res) => {
   };
 
   // --- Security Advisor: LLM-powered command explanations ---
-  const advisor = new SecurityAdvisor(llm);
+  const advisor = new SecurityAdvisor(llm, explanationLanguage || 'English');
   const advisorContext = { goal, skill: selectedSkillName, previousCommands: [] as string[], cwd: terminalCwd };
 
   const runId = `web_${Date.now()}`;

@@ -144,18 +144,18 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
     reason: 'Contains invisible/zero-width characters (may hide instructions)',
   },
 
-  // --- Russian-language injections ---
+  // --- Russian-language injections (detect regardless of UI language) ---
   {
     pattern: /(?:игнорируй|забудь|отмени|отбрось)\s+(?:все\s+)?(?:предыдущие|прошлые|свои|системные)\s+(?:инструкции|правила|указания|промпт)/gi,
     category: 'INSTRUCTION_OVERRIDE_RU',
     severity: 'block',
-    reason: 'Попытка отмены системных инструкций (рус)',
+    reason: 'Attempted system instruction override (Russian)',
   },
   {
     pattern: /(?:покажи|выведи|скажи|напечатай)\s+(?:свой|системный|исходный|полный)\s+(?:промпт|инструкции|правила)/gi,
     category: 'PROMPT_EXTRACTION_RU',
     severity: 'block',
-    reason: 'Попытка извлечения системного промпта (рус)',
+    reason: 'Attempted system prompt extraction (Russian)',
   },
 ];
 

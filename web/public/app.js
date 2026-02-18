@@ -7,21 +7,21 @@
 
 // ===== Model catalogs per provider =====
 const MODEL_CATALOG = {
-  openai:     ['gpt-5.2', 'gpt-5.2-pro', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.1', 'gpt-5.1-codex', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'o3'],
-  anthropic:  ['claude-opus-4-20250514', 'claude-sonnet-4-20250514', 'claude-3.5-haiku-20241022'],
-  gemini:     ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
+  openai:     ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'o3-mini', 'o4-mini'],
+  anthropic:  ['claude-opus-4-0', 'claude-sonnet-4-0', 'claude-3-5-haiku-latest'],
+  gemini:     ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
   deepseek:   ['deepseek-chat', 'deepseek-reasoner'],
-  groq:       ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+  groq:       ['llama-3.3-70b-versatile', 'mistral-saba-24b', 'gemma2-9b-it'],
   mistral:    ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
-  together:   ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'Qwen/Qwen2.5-72B-Instruct-Turbo'],
-  xai:        ['grok-3', 'grok-3-mini', 'grok-2'],
-  moonshot:   ['kimi-k2', 'moonshot-v1-128k', 'moonshot-v1-32k'],
-  minimax:    ['MiniMax-M2.1', 'MiniMax-Text-01'],
-  venice:     ['venice/llama-3.3-70b', 'venice/claude-opus-45', 'venice/deepseek-r1-671b'],
-  qwen:       ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen2.5-72b-instruct'],
-  glm:        ['glm-4-plus', 'glm-4-flash', 'glm-4'],
-  bedrock:    ['anthropic.claude-sonnet-4-20250514-v1:0', 'anthropic.claude-3-haiku-20240307-v1:0', 'meta.llama3-70b-instruct-v1:0'],
-  openrouter: ['openai/gpt-5.2', 'openai/gpt-5-mini', 'openai/gpt-4.1', 'anthropic/claude-sonnet-4', 'anthropic/claude-3.5-haiku', 'google/gemini-2.5-flash', 'meta-llama/llama-3.3-70b-instruct', 'deepseek/deepseek-chat'],
+  together:   ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'deepseek-ai/DeepSeek-V3.1', 'Qwen/Qwen2.5-72B-Instruct-Turbo'],
+  xai:        ['grok-3', 'grok-3-fast', 'grok-2'],
+  moonshot:   ['kimi-k2-thinking', 'kimi-k2-thinking-turbo', 'kimi-latest', 'moonshot-v1-32k'],
+  minimax:    ['MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
+  venice:     [],  // Dynamic — use GET /api/v1/models
+  qwen:       ['qwen3-max', 'qwen-plus', 'qwen-flash', 'qwen-turbo'],
+  glm:        ['GLM-4-Plus', 'GLM-4-Air-250414', 'GLM-4-AirX', 'GLM-4-Flash-250414', 'GLM-4-FlashX-250414'],
+  bedrock:    ['anthropic.claude-sonnet-4-20250514-v1:0', 'anthropic.claude-opus-4-20250514-v1:0', 'anthropic.claude-3-haiku-20240307-v1:0', 'meta.llama3-70b-instruct-v1:0'],
+  openrouter: [],  // Dynamic — use GET /api/v1/models
   ollama:     ['llama3.3', 'llama3.1', 'mistral', 'qwen2.5', 'gemma2', 'phi3', 'codellama', 'deepseek-r1'],
 };
 
@@ -34,7 +34,7 @@ const PROVIDER_KEY_LINKS = {
   mistral:   { url: 'https://console.mistral.ai/api-keys', label: 'console.mistral.ai' },
   together:  { url: 'https://api.together.xyz/settings/api-keys', label: 'api.together.xyz' },
   xai:       { url: 'https://console.x.ai/', label: 'console.x.ai' },
-  moonshot:  { url: 'https://platform.moonshot.cn/console/api-keys', label: 'platform.moonshot.cn' },
+  moonshot:  { url: 'https://platform.moonshot.ai/console/api-keys', label: 'platform.moonshot.ai' },
   minimax:   { url: 'https://www.minimaxi.com/platform', label: 'minimaxi.com' },
   venice:    { url: 'https://venice.ai/settings/api', label: 'venice.ai' },
   qwen:      { url: 'https://dashscope.console.aliyun.com/apiKey', label: 'dashscope.aliyun.com' },
@@ -139,9 +139,9 @@ function authHeaders(extra = {}) {
 // ===== Skills: Load + Render + Select =====
 
 const SECURITY_LEVEL_LABELS = {
-  safe:     { text: 'Safe / \u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u044b\u0439', cls: 'safe' },
-  moderate: { text: 'Moderate / \u0423\u043c\u0435\u0440\u0435\u043d\u043d\u044b\u0439', cls: 'moderate' },
-  full:     { text: 'Full Access / \u041f\u043e\u043b\u043d\u044b\u0439 \u0434\u043e\u0441\u0442\u0443\u043f', cls: 'full' },
+  safe:     { text: 'Safe', cls: 'safe' },
+  moderate: { text: 'Moderate', cls: 'moderate' },
+  full:     { text: 'Full Access', cls: 'full' },
 };
 
 async function loadSkills() {
@@ -170,7 +170,7 @@ function renderSkillGrid() {
         <span class="skill-card-icon">${skill.icon || '\u{1F916}'}</span>
         <span class="skill-card-name">${skill.name}</span>
       </div>
-      <div class="skill-card-desc">${skill.descriptionRu || skill.description}</div>
+      <div class="skill-card-desc">${skill.description}</div>
       <div class="skill-card-level ${skill.securityLevel}">${SECURITY_LEVEL_LABELS[skill.securityLevel]?.text || skill.securityLevel}</div>
     `;
     card.addEventListener('click', () => selectSkill(skill.key));
@@ -263,6 +263,11 @@ async function loadSavedSettings() {
       const el = document.getElementById('scrubPhones');
       if (el) el.checked = true;
     }
+    // Restore explanation language
+    if (settings.explanationLanguage) {
+      const el = document.getElementById('explanationLanguage');
+      if (el) el.value = settings.explanationLanguage;
+    }
   } catch {
     // No saved settings — that's fine
   }
@@ -282,6 +287,7 @@ async function saveSettings() {
     localOnlyNotes: (document.getElementById('localOnlyNotes')?.value || '').trim(),
     scrubEmails: document.getElementById('scrubEmails')?.checked ? 'true' : 'false',
     scrubPhones: document.getElementById('scrubPhones')?.checked ? 'true' : 'false',
+    explanationLanguage: document.getElementById('explanationLanguage')?.value || 'English',
   };
   try {
     await fetch('/api/settings', {
@@ -309,11 +315,10 @@ function showApprovalModal(data) {
   }
   if (expEl) {
     const reasons = [];
-    if (data.reasonRu) reasons.push(data.reasonRu);
-    if (data.reason && data.reason !== data.reasonRu) reasons.push(data.reason);
+    if (data.reason) reasons.push(data.reason);
     if (data.checks && data.checks.length > 0) {
       data.checks.forEach(c => {
-        const desc = c.descriptionRu || c.description || c.category;
+        const desc = c.description || c.category;
         if (desc) reasons.push(`\u2022 ${desc}`);
       });
     }
@@ -333,7 +338,7 @@ function showApprovalModal(data) {
     if (secondsLeft <= 0) {
       clearInterval(approvalTimerInterval);
       hideApprovalModal();
-      addSecurityEntry('denied', '\u23f0 Timeout', data.args?.command || data.toolName || '', '\u0422\u0430\u0439\u043c\u0430\u0443\u0442 — \u0430\u0432\u0442\u043e\u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0435');
+      addSecurityEntry('denied', '\u23f0 Timeout', data.args?.command || data.toolName || '', 'Timeout — auto-denied');
     }
   }, 1000);
 
@@ -368,7 +373,7 @@ async function respondApproval(approved) {
     approved ? 'approved' : 'denied',
     approved ? '\u2705 Approved' : '\u274c Denied',
     cmd,
-    approved ? '\u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u043c' : '\u0417\u0430\u043f\u0440\u0435\u0449\u0435\u043d\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u043c'
+    approved ? 'Approved by user' : 'Denied by user'
   );
 }
 
@@ -405,7 +410,7 @@ function escapeHtml(str) {
 // ===== Command Explanation Display (Security Advisor) =====
 
 const RISK_ICONS = { safe: '\u2705', low: '\u{1F7E2}', medium: '\u{1F7E1}', high: '\u{1F7E0}', critical: '\u{1F534}' };
-const RISK_LABELS = { safe: '\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e', low: '\u041d\u0438\u0437\u043a\u0438\u0439', medium: '\u0423\u043c\u0435\u0440\u0435\u043d\u043d\u044b\u0439', high: '\u0412\u044b\u0441\u043e\u043a\u0438\u0439', critical: '\u041a\u0440\u0438\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439' };
+const RISK_LABELS = { safe: 'Safe', low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };
 
 function showCommandExplanation(data) {
   const { command, explanation } = data;
@@ -414,7 +419,7 @@ function showCommandExplanation(data) {
   const riskIcon = RISK_ICONS[explanation.risk] || '\u2753';
   const riskLabel = RISK_LABELS[explanation.risk] || explanation.risk;
   const reversibleIcon = explanation.reversible ? '\u21A9\uFE0F' : '\u26A0\uFE0F';
-  const reversibleText = explanation.reversible ? '\u041e\u0431\u0440\u0430\u0442\u0438\u043c\u043e' : '\u041d\u0435\u043e\u0431\u0440\u0430\u0442\u0438\u043c\u043e';
+  const reversibleText = explanation.reversible ? 'Reversible' : 'Irreversible';
 
   // Add to security feed with explanation
   const feed = document.getElementById('securityFeed');
@@ -453,14 +458,14 @@ function updateApprovalWithAnalysis(data) {
   const riskIcon = RISK_ICONS[explanation.risk] || '\u2753';
   const riskLabel = RISK_LABELS[explanation.risk] || explanation.risk;
   const reversibleIcon = explanation.reversible ? '\u21A9\uFE0F' : '\u26A0\uFE0F';
-  const reversibleText = explanation.reversible ? '\u041e\u0431\u0440\u0430\u0442\u0438\u043c\u043e' : '\u041d\u0415\u041e\u0411\u0420\u0410\u0422\u0418\u041c\u041e';
+  const reversibleText = explanation.reversible ? 'Reversible' : 'IRREVERSIBLE';
 
   expEl.innerHTML = `
     <div class="advisor-analysis">
       <div class="advisor-what">${escapeHtml(explanation.whatItDoes)}</div>
-      <div class="advisor-risk">${riskIcon} \u0420\u0438\u0441\u043a: <strong>${riskLabel}</strong> | ${reversibleIcon} ${reversibleText}</div>
+      <div class="advisor-risk">${riskIcon} Risk: <strong>${riskLabel}</strong> | ${reversibleIcon} ${reversibleText}</div>
       ${explanation.consequences ? `<div class="advisor-consequences">\u26A0\uFE0F ${escapeHtml(explanation.consequences)}</div>` : ''}
-      ${explanation.saferAlternative ? `<div class="advisor-alternative">\u{1F4A1} \u0410\u043b\u044c\u0442\u0435\u0440\u043d\u0430\u0442\u0438\u0432\u0430: <code>${escapeHtml(explanation.saferAlternative)}</code></div>` : ''}
+      ${explanation.saferAlternative ? `<div class="advisor-alternative">\u{1F4A1} Alternative: <code>${escapeHtml(explanation.saferAlternative)}</code></div>` : ''}
       <div class="advisor-recommendation">${escapeHtml(explanation.recommendation)}</div>
     </div>
   `;
@@ -1029,6 +1034,7 @@ function collectConfig() {
     channels: collectChannelCredentials(),
     accessPolicy: collectAccessPolicy(),
     skill: selectedSkill,
+    explanationLanguage: document.getElementById('explanationLanguage')?.value || 'English',
   };
 }
 
@@ -1146,7 +1152,7 @@ function resetDashboard() {
   summaryCard.style.display = 'none';
   // Clear security feed
   const secFeed = document.getElementById('securityFeed');
-  if (secFeed) secFeed.innerHTML = '<div class="feed-placeholder">Security decisions will appear here / \u0420\u0435\u0448\u0435\u043d\u0438\u044f \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 \u043f\u043e\u044f\u0432\u044f\u0442\u0441\u044f \u0437\u0434\u0435\u0441\u044c</div>';
+  if (secFeed) secFeed.innerHTML = '<div class="feed-placeholder">Security decisions will appear here</div>';
   // Close approval modal if open
   hideApprovalModal();
 }

@@ -158,7 +158,6 @@ export function splitAndAnalyze(command: string, platform: Platform): ChainAnaly
       category: 'OBFUSCATION',
       pattern: 'command_substitution',
       explanation: 'Contains command substitution ($() or backticks) — embedded commands may be hidden',
-      explanationRu: 'Содержит подстановку команд ($() или обратные кавычки) — скрытые команды внутри',
       command,
     });
   }

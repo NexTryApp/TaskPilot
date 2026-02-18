@@ -16,7 +16,6 @@ import { ApprovalManager, type PendingApproval } from './approval-manager.js';
 export type ExecDecision = {
   action: 'ALLOW' | 'WARN' | 'BLOCK';
   reason: string;
-  reasonRu: string;
   checks: CommandCheckResult[];
   requiresApproval: boolean;
   approvalId?: string;
@@ -56,13 +55,11 @@ export class ExecGuard {
       return {
         action: 'BLOCK',
         reason: blockedPath.explanation,
-        reasonRu: blockedPath.explanationRu,
         checks: [{
           severity: 'BLOCK',
           category: 'BLOCKED_PATH',
           pattern: blockedPath.path,
           explanation: blockedPath.explanation,
-          explanationRu: blockedPath.explanationRu,
           command,
         }],
         requiresApproval: false,
@@ -74,7 +71,6 @@ export class ExecGuard {
       return {
         action: 'ALLOW',
         reason: 'Safe command (read-only utility)',
-        reasonRu: 'Безопасная команда (утилита только для чтения)',
         checks: [],
         requiresApproval: false,
       };
@@ -93,13 +89,11 @@ export class ExecGuard {
             return {
               action: 'BLOCK',
               reason: `Blocked by skill "${this.skill.name}" — denied pattern: ${pattern}`,
-              reasonRu: `Заблокировано скиллом "${this.skill.name}" — запрещённый паттерн: ${pattern}`,
               checks: [{
                 severity: 'BLOCK',
                 category: 'SKILL_DENIED',
                 pattern,
                 explanation: `Skill "${this.skill.name}" denies this command pattern`,
-                explanationRu: `Скилл "${this.skill.name}" запрещает этот паттерн команды`,
                 command,
               }],
               requiresApproval: false,
@@ -118,13 +112,11 @@ export class ExecGuard {
           return {
             action: 'BLOCK',
             reason: `Blocked by skill "${this.skill.name}" — command not in allowed list`,
-            reasonRu: `Заблокировано скиллом "${this.skill.name}" — команда не в списке разрешённых`,
             checks: [{
               severity: 'BLOCK',
               category: 'SKILL_NOT_ALLOWED',
               pattern: 'allowedCommands',
               explanation: `Skill "${this.skill.name}" only allows specific command patterns`,
-              explanationRu: `Скилл "${this.skill.name}" разрешает только определённые паттерны команд`,
               command,
             }],
             requiresApproval: false,
@@ -137,13 +129,11 @@ export class ExecGuard {
         return {
           action: 'BLOCK',
           reason: `Blocked by skill "${this.skill.name}" — only safe read-only commands allowed`,
-          reasonRu: `Заблокировано скиллом "${this.skill.name}" — разрешены только безопасные команды чтения`,
           checks: [{
             severity: 'BLOCK',
             category: 'SKILL_SAFE_BINS_ONLY',
             pattern: 'safeBinsOnly',
             explanation: `Skill "${this.skill.name}" restricts to safe read-only commands`,
-            explanationRu: `Скилл "${this.skill.name}" ограничивает только безопасными командами`,
             command,
           }],
           requiresApproval: false,
@@ -157,7 +147,6 @@ export class ExecGuard {
       return {
         action: 'BLOCK',
         reason: blockChecks[0]?.explanation ?? 'Command blocked by security policy',
-        reasonRu: blockChecks[0]?.explanationRu ?? 'Команда заблокирована политикой безопасности',
         checks: analysis.allChecks,
         requiresApproval: false,
       };
@@ -168,7 +157,6 @@ export class ExecGuard {
       return {
         action: 'WARN',
         reason: warnChecks[0]?.explanation ?? 'Command requires user approval',
-        reasonRu: warnChecks[0]?.explanationRu ?? 'Команда требует подтверждения пользователя',
         checks: analysis.allChecks,
         requiresApproval: true,
       };
@@ -178,7 +166,6 @@ export class ExecGuard {
     return {
       action: 'ALLOW',
       reason: 'Command passed all security checks',
-      reasonRu: 'Команда прошла все проверки безопасности',
       checks: [],
       requiresApproval: false,
     };
@@ -199,7 +186,6 @@ export class ExecGuard {
       return {
         action: 'WARN',
         reason: `Tool "${toolName}" requires user approval for skill "${this.skill.name}"`,
-        reasonRu: `Инструмент "${toolName}" требует подтверждения для скилла "${this.skill.name}"`,
         checks: [],
         requiresApproval: true,
       };
@@ -208,7 +194,6 @@ export class ExecGuard {
     return {
       action: 'ALLOW',
       reason: 'Tool allowed',
-      reasonRu: 'Инструмент разрешён',
       checks: [],
       requiresApproval: false,
     };
@@ -229,9 +214,8 @@ export class ExecGuard {
       if (decision.action === 'BLOCK') {
         // Throw with detailed message so the agent gets feedback
         throw new Error(
-          `[SECURITY BLOCK] ${decision.reasonRu}\n` +
-          `Reason: ${decision.reason}\n` +
-          decision.checks.map(c => `  - ${c.category}: ${c.explanationRu}`).join('\n')
+          `[SECURITY BLOCK] ${decision.reason}\n` +
+          decision.checks.map(c => `  - ${c.category}: ${c.explanation}`).join('\n')
         );
       }
 
@@ -251,9 +235,9 @@ export class ExecGuard {
 
         if (!approved) {
           throw new Error(
-            `[SECURITY DENIED] Пользователь отклонил выполнение / User denied execution.\n` +
+            `[SECURITY DENIED] User denied execution.\n` +
             `Tool: ${toolName}\n` +
-            `Reason: ${decision.reasonRu}`
+            `Reason: ${decision.reason}`
           );
         }
 

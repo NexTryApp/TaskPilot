@@ -130,7 +130,6 @@ export class Repository {
       toolName?: string;
       category?: string;
       explanation?: string;
-      explanationRu?: string;
       userDecision?: string;
     }
   ): void {
@@ -145,7 +144,7 @@ export class Repository {
       action,
       options?.category ?? null,
       options?.explanation ?? null,
-      options?.explanationRu ?? null,
+      null,
       options?.userDecision ?? null,
     );
   }

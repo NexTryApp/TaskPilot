@@ -4,7 +4,7 @@
  * Run: npx tsx scripts/security-audit.ts
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
+import { readFileSync, readdirSync, existsSync } from 'fs';
 import path from 'path';
 
 // --- Types ---
@@ -17,7 +17,6 @@ export interface AuditFinding {
   file: string;
   line?: number;
   message: string;
-  messageRu: string;
 }
 
 // --- Patterns ---
@@ -34,11 +33,11 @@ const SECRET_PATTERNS = [
 ];
 
 const UNSAFE_PATTERNS = [
-  { pattern: /0\.0\.0\.0/, category: 'NETWORK', message: 'Open binding (0.0.0.0) — accessible from network', messageRu: 'Открытый биндинг (0.0.0.0) — доступен из сети' },
-  { pattern: /eval\s*\(/, category: 'CODE_INJECTION', message: 'eval() usage detected', messageRu: 'Обнаружено использование eval()' },
-  { pattern: /child_process.*exec\b(?!Async)/, category: 'COMMAND_INJECTION', message: 'Direct exec() without safety checks', messageRu: 'Прямой exec() без проверки безопасности' },
-  { pattern: /password\s*[:=]\s*['"][^'"]{3,}['"]/, category: 'HARDCODED_CREDS', message: 'Possible hardcoded password', messageRu: 'Возможно захардкоженный пароль' },
-  { pattern: /TODO.*security|FIXME.*security|HACK.*security/i, category: 'TODO', message: 'Security TODO/FIXME found', messageRu: 'Найден TODO/FIXME по безопасности' },
+  { pattern: /0\.0\.0\.0/, category: 'NETWORK', message: 'Open binding (0.0.0.0) — accessible from network' },
+  { pattern: /eval\s*\(/, category: 'CODE_INJECTION', message: 'eval() usage detected' },
+  { pattern: /child_process.*exec\b(?!Async)/, category: 'COMMAND_INJECTION', message: 'Direct exec() without safety checks' },
+  { pattern: /password\s*[:=]\s*['"][^'"]{3,}['"]/, category: 'HARDCODED_CREDS', message: 'Possible hardcoded password' },
+  { pattern: /TODO.*security|FIXME.*security|HACK.*security/i, category: 'TODO', message: 'Security TODO/FIXME found' },
 ];
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'data', 'openclaw', '.next', 'venv', '__pycache__']);
@@ -98,7 +97,6 @@ function checkFile(filePath: string): AuditFinding[] {
           file: relPath,
           line: i + 1,
           message: `Hardcoded ${sp.name} detected`,
-          messageRu: `Обнаружен захардкоженный ${sp.name}`,
         });
       }
     }
@@ -116,7 +114,6 @@ function checkFile(filePath: string): AuditFinding[] {
           file: relPath,
           line: i + 1,
           message: up.message,
-          messageRu: up.messageRu,
         });
       }
     }
@@ -144,7 +141,6 @@ function checkSkillSecurity(skillsDir: string): AuditFinding[] {
           category: 'SKILL_CONFIG',
           file: `skills/${file}`,
           message: 'Full-access skill without safety rules',
-          messageRu: 'Скилл с полным доступом без правил безопасности',
         });
       }
     }
@@ -156,7 +152,6 @@ function checkSkillSecurity(skillsDir: string): AuditFinding[] {
         category: 'SKILL_CONFIG',
         file: `skills/${file}`,
         message: 'Skill allows all tools (wildcard *)',
-        messageRu: 'Скилл разрешает все инструменты (*)' ,
       });
     }
   }
@@ -188,7 +183,6 @@ function checkEnvFiles(rootDir: string): AuditFinding[] {
           file: envFile,
           line: i + 1,
           message: `Secret in .env file: ${match[1]} (ensure not committed to git)`,
-          messageRu: `Секрет в .env файле: ${match[1]} (убедитесь, что не закоммичен)`,
         });
       }
     }
@@ -204,7 +198,6 @@ function checkEnvFiles(rootDir: string): AuditFinding[] {
         category: 'GITIGNORE',
         file: '.gitignore',
         message: '.env not in .gitignore — secrets may be committed',
-        messageRu: '.env не в .gitignore — секреты могут быть закоммичены',
       });
     }
   }

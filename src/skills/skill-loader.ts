@@ -100,7 +100,7 @@ export function parseSkillFile(content: string): SkillDefinition {
   return {
     name: String(data['name'] ?? 'unnamed'),
     description: String(data['description'] ?? ''),
-    descriptionRu: String(data['descriptionRu'] ?? data['description'] ?? ''),
+    // REMOVED: descriptionRu
     icon: String(data['icon'] ?? 'default'),
     securityLevel: (['safe', 'moderate', 'full'].includes(String(data['securityLevel']))
       ? String(data['securityLevel']) as 'safe' | 'moderate' | 'full'

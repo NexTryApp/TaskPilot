@@ -8,8 +8,6 @@ export interface SkillDefinition {
   name: string;
   /** English description. */
   description: string;
-  /** Russian description. */
-  descriptionRu: string;
   /** Icon emoji or name. */
   icon: string;
   /** Security level determines UI color indicator. */
