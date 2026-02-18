@@ -1089,6 +1089,9 @@ app.post('/api/run', requireAuth, async (req, res) => {
   // Create tool registry
   const toolRegistry = createDemoTools(uniqueTools, channels);
 
+  // --- MCP: register tools from connected MCP servers ---
+  registerMcpTools(toolRegistry);
+
   // --- Security: Create ExecGuard with selected skill ---
   const { policy } = skillToAccessPolicy(selectedSkill, {
     approvalManager: globalApprovalManager,
@@ -1554,6 +1557,415 @@ app.get('/api/telegram/status', requireAuth, (_req, res) => {
 });
 
 // ============================================================================
+// DISCORD AUTO-RESPONDER (background polling)
+// ============================================================================
+
+let dcPollingActive = false;
+let dcPollingTimer: ReturnType<typeof setTimeout> | null = null;
+let dcLastMessageId = '';
+
+function startDiscordPolling(): void {
+  const savedSettings = repo.getAllSettings();
+  const channelsRaw = savedSettings['channels'];
+  let channels: Record<string, unknown> | null = null;
+  try { channels = channelsRaw ? JSON.parse(channelsRaw) : null; } catch { channels = null; }
+
+  const dcConfig = channels?.discord as Record<string, string> | undefined;
+  const botToken = dcConfig?.botToken || '';
+  const channelId = dcConfig?.channelId || '';
+  if (!botToken || !channelId) {
+    if (dcPollingActive) { console.log('  [DC] Discord not configured — polling stopped'); dcPollingActive = false; }
+    return;
+  }
+
+  const apiKey = repo.getSecret('apiKey') || '';
+  const model = savedSettings['model'] || '';
+  const baseUrl = savedSettings['baseUrl'] || 'https://api.openai.com/v1';
+  const skillName = savedSettings['dcSkill'] || savedSettings['skill'] || 'web-researcher';
+  const selectedSkill = allSkills.get(skillName) || getBuiltinSkill('web-researcher')!;
+
+  if (!apiKey || !model) { return; }
+
+  const DC_API = 'https://discord.com/api/v10';
+  dcPollingActive = true;
+
+  // Get bot's own user ID to ignore own messages
+  let botUserId = '';
+  fetch(`${DC_API}/users/@me`, { headers: { Authorization: `Bot ${botToken}` } })
+    .then(r => r.json())
+    .then((data: { id?: string }) => { botUserId = data.id || ''; })
+    .catch(() => {});
+
+  async function poll(): Promise<void> {
+    if (!dcPollingActive) return;
+    try {
+      const url = dcLastMessageId
+        ? `${DC_API}/channels/${channelId}/messages?after=${dcLastMessageId}&limit=10`
+        : `${DC_API}/channels/${channelId}/messages?limit=1`;
+
+      const resp = await fetch(url, { headers: { Authorization: `Bot ${botToken}` } });
+      if (!resp.ok) { dcPollingTimer = setTimeout(poll, 5000); return; }
+
+      const messages = (await resp.json()) as Array<{ id: string; content: string; author: { id: string; username: string; bot?: boolean }; timestamp: string }>;
+      if (!Array.isArray(messages) || messages.length === 0) {
+        dcPollingTimer = setTimeout(poll, 3000);
+        return;
+      }
+
+      // Discord returns newest first — reverse to process chronologically
+      messages.reverse();
+
+      // On first poll, just record the latest ID without responding
+      if (!dcLastMessageId) {
+        dcLastMessageId = messages[messages.length - 1].id;
+        dcPollingTimer = setTimeout(poll, 3000);
+        return;
+      }
+
+      for (const msg of messages) {
+        dcLastMessageId = msg.id;
+        // Skip bot messages and own messages
+        if (msg.author.bot || msg.author.id === botUserId) continue;
+        if (!msg.content) continue;
+
+        console.log(`  [DC] Message from ${msg.author.username}: ${msg.content.slice(0, 80)}`);
+
+        try {
+          const enabledToolNames: string[] = selectedSkill.allowedTools.includes('*')
+            ? ['browser_open', 'browser_search', 'create_task', 'get_weather']
+            : [...selectedSkill.allowedTools];
+
+          const toolRegistry = createDemoTools(enabledToolNames, channels || undefined);
+          const { policy } = skillToAccessPolicy(selectedSkill);
+          toolRegistry.setAccessPolicy(policy);
+
+          const memory = new BufferMemory();
+          const llm = new OpenAIAdapter({ model, baseUrl: baseUrl.replace(/\/+$/, ''), apiKey });
+
+          const goalText = `User "${msg.author.username}" sent a Discord message: "${msg.content}". Respond helpfully and concisely.`;
+          const runId = `dc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          repo.createRun(runId, goalText, skillName);
+
+          const state = await runAgentLoop(
+            { goal: goalText, runId },
+            memory, toolRegistry, llm, null,
+            { maxSteps: 8, systemPrompt: 'You are a helpful AI assistant in a Discord channel. Be concise. Answer in the same language the user writes in.' }
+          );
+
+          const reply = state.finalAnswer || 'Sorry, I could not process your request.';
+
+          // Discord max message length is 2000 chars
+          const truncatedReply = reply.length > 1900 ? reply.slice(0, 1900) + '...' : reply;
+          await fetch(`${DC_API}/channels/${channelId}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: truncatedReply }),
+          });
+
+          console.log(`  [DC] Reply sent to ${msg.author.username}`);
+          repo.finishRun(runId, state.currentStep, reply);
+        } catch (err) {
+          console.error(`  [DC] Agent error:`, err instanceof Error ? err.message : err);
+        }
+      }
+    } catch (err) {
+      console.error('  [DC] Polling error:', err instanceof Error ? err.message : err);
+    }
+    dcPollingTimer = setTimeout(poll, 3000);
+  }
+
+  console.log(`  [DC] Discord polling started (channel: ${channelId}, skill: ${skillName})`);
+  poll();
+}
+
+function stopDiscordPolling(): void {
+  dcPollingActive = false;
+  if (dcPollingTimer) { clearTimeout(dcPollingTimer); dcPollingTimer = null; }
+  console.log('  [DC] Discord polling stopped');
+}
+
+app.post('/api/discord/start', requireAuth, (_req, res) => {
+  if (dcPollingActive) return res.json({ ok: true, status: 'already_running' });
+  startDiscordPolling();
+  res.json({ ok: true, status: dcPollingActive ? 'started' : 'missing_config' });
+});
+
+app.post('/api/discord/stop', requireAuth, (_req, res) => {
+  stopDiscordPolling();
+  res.json({ ok: true, status: 'stopped' });
+});
+
+app.get('/api/discord/status', requireAuth, (_req, res) => {
+  res.json({ active: dcPollingActive });
+});
+
+// ============================================================================
+// SLACK AUTO-RESPONDER (background polling)
+// ============================================================================
+
+let slPollingActive = false;
+let slPollingTimer: ReturnType<typeof setTimeout> | null = null;
+let slLastTs = '';
+
+function startSlackPolling(): void {
+  const savedSettings = repo.getAllSettings();
+  const channelsRaw = savedSettings['channels'];
+  let channels: Record<string, unknown> | null = null;
+  try { channels = channelsRaw ? JSON.parse(channelsRaw) : null; } catch { channels = null; }
+
+  const slConfig = channels?.slack as Record<string, string> | undefined;
+  const botToken = slConfig?.botToken || '';
+  const channelId = slConfig?.channelId || '';
+  if (!botToken || !channelId) {
+    if (slPollingActive) { console.log('  [SL] Slack not configured — polling stopped'); slPollingActive = false; }
+    return;
+  }
+
+  const apiKey = repo.getSecret('apiKey') || '';
+  const model = savedSettings['model'] || '';
+  const baseUrl = savedSettings['baseUrl'] || 'https://api.openai.com/v1';
+  const skillName = savedSettings['slSkill'] || savedSettings['skill'] || 'web-researcher';
+  const selectedSkill = allSkills.get(skillName) || getBuiltinSkill('web-researcher')!;
+
+  if (!apiKey || !model) { return; }
+
+  slPollingActive = true;
+
+  // Get bot's own user ID
+  let botUserId = '';
+  fetch('https://slack.com/api/auth.test', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${botToken}`, 'Content-Type': 'application/json' },
+  }).then(r => r.json())
+    .then((data: { user_id?: string }) => { botUserId = data.user_id || ''; })
+    .catch(() => {});
+
+  async function poll(): Promise<void> {
+    if (!slPollingActive) return;
+    try {
+      const params = new URLSearchParams({ channel: channelId, limit: '10' });
+      if (slLastTs) params.set('oldest', slLastTs);
+
+      const resp = await fetch(`https://slack.com/api/conversations.history?${params}`, {
+        headers: { Authorization: `Bearer ${botToken}` },
+      });
+      const data = await resp.json() as {
+        ok?: boolean;
+        messages?: Array<{ ts: string; text: string; user?: string; bot_id?: string; subtype?: string }>;
+      };
+
+      if (!data.ok || !data.messages || data.messages.length === 0) {
+        slPollingTimer = setTimeout(poll, 3000);
+        return;
+      }
+
+      // Slack returns newest first — reverse
+      const msgs = [...data.messages].reverse();
+
+      // On first poll, just record latest ts
+      if (!slLastTs) {
+        slLastTs = msgs[msgs.length - 1].ts;
+        slPollingTimer = setTimeout(poll, 3000);
+        return;
+      }
+
+      for (const msg of msgs) {
+        // Skip if same or older than last processed
+        if (parseFloat(msg.ts) <= parseFloat(slLastTs)) continue;
+        slLastTs = msg.ts;
+
+        // Skip bot messages, subtypes (joins, etc.)
+        if (msg.bot_id || msg.subtype || msg.user === botUserId) continue;
+        if (!msg.text) continue;
+
+        console.log(`  [SL] Message from ${msg.user}: ${msg.text.slice(0, 80)}`);
+
+        try {
+          const enabledToolNames: string[] = selectedSkill.allowedTools.includes('*')
+            ? ['browser_open', 'browser_search', 'create_task', 'get_weather']
+            : [...selectedSkill.allowedTools];
+
+          const toolRegistry = createDemoTools(enabledToolNames, channels || undefined);
+          const { policy } = skillToAccessPolicy(selectedSkill);
+          toolRegistry.setAccessPolicy(policy);
+
+          const memory = new BufferMemory();
+          const llm = new OpenAIAdapter({ model, baseUrl: baseUrl.replace(/\/+$/, ''), apiKey });
+
+          const goalText = `User sent a Slack message: "${msg.text}". Respond helpfully and concisely.`;
+          const runId = `sl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          repo.createRun(runId, goalText, skillName);
+
+          const state = await runAgentLoop(
+            { goal: goalText, runId },
+            memory, toolRegistry, llm, null,
+            { maxSteps: 8, systemPrompt: 'You are a helpful AI assistant in a Slack channel. Be concise. Answer in the same language the user writes in.' }
+          );
+
+          const reply = state.finalAnswer || 'Sorry, I could not process your request.';
+
+          await fetch('https://slack.com/api/chat.postMessage', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${botToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel: channelId, text: reply, thread_ts: msg.ts }),
+          });
+
+          console.log(`  [SL] Reply sent in thread`);
+          repo.finishRun(runId, state.currentStep, reply);
+        } catch (err) {
+          console.error(`  [SL] Agent error:`, err instanceof Error ? err.message : err);
+        }
+      }
+    } catch (err) {
+      console.error('  [SL] Polling error:', err instanceof Error ? err.message : err);
+    }
+    slPollingTimer = setTimeout(poll, 3000);
+  }
+
+  console.log(`  [SL] Slack polling started (channel: ${channelId}, skill: ${skillName})`);
+  poll();
+}
+
+function stopSlackPolling(): void {
+  slPollingActive = false;
+  if (slPollingTimer) { clearTimeout(slPollingTimer); slPollingTimer = null; }
+  console.log('  [SL] Slack polling stopped');
+}
+
+app.post('/api/slack/start', requireAuth, (_req, res) => {
+  if (slPollingActive) return res.json({ ok: true, status: 'already_running' });
+  startSlackPolling();
+  res.json({ ok: true, status: slPollingActive ? 'started' : 'missing_config' });
+});
+
+app.post('/api/slack/stop', requireAuth, (_req, res) => {
+  stopSlackPolling();
+  res.json({ ok: true, status: 'stopped' });
+});
+
+app.get('/api/slack/status', requireAuth, (_req, res) => {
+  res.json({ active: slPollingActive });
+});
+
+// ============================================================================
+// MCP (Model Context Protocol) INTEGRATION
+// ============================================================================
+
+import { McpClient } from '../src/mcp/index.js';
+import type { McpServerConfig } from '../src/mcp/index.js';
+import fs from 'fs';
+
+const mcpClients = new Map<string, McpClient>();
+
+// Load MCP server configs from data/mcp.json
+function loadMcpConfig(): McpServerConfig[] {
+  const configPath = path.join(path.dirname(__dirname), 'data', 'mcp.json');
+  try {
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed.servers) ? parsed.servers : [];
+  } catch {
+    return [];
+  }
+}
+
+// Save MCP config
+function saveMcpConfig(servers: McpServerConfig[]): void {
+  const configPath = path.join(path.dirname(__dirname), 'data', 'mcp.json');
+  fs.writeFileSync(configPath, JSON.stringify({ servers }, null, 2));
+}
+
+// Connect to all configured MCP servers and register their tools
+async function initMcpServers(): Promise<void> {
+  const servers = loadMcpConfig();
+  if (servers.length === 0) return;
+
+  console.log(`  [MCP] Connecting to ${servers.length} server(s)...`);
+
+  for (const config of servers) {
+    try {
+      const client = new McpClient(config);
+      await client.connect();
+      const tools = await client.listTools();
+      mcpClients.set(config.name, client);
+      console.log(`  [MCP] ${config.name}: connected, ${tools.length} tools (${tools.map(t => t.name).join(', ')})`);
+    } catch (err) {
+      console.error(`  [MCP] ${config.name}: connection failed —`, err instanceof Error ? err.message : err);
+    }
+  }
+}
+
+// Register MCP tools into a ToolRegistry for a specific agent run
+function registerMcpTools(registry: ToolRegistry): void {
+  for (const [serverName, client] of mcpClients) {
+    if (!client.isConnected) continue;
+
+    // Use cached tools from listTools
+    client.listTools().then(tools => {
+      for (const tool of tools) {
+        const fullName = `mcp_${serverName}_${tool.name}`;
+        registry.register({
+          name: fullName,
+          definition: {
+            name: fullName,
+            description: `[MCP: ${serverName}] ${tool.description}`,
+            parameters: tool.inputSchema as Record<string, { type: string; description?: string }>,
+          },
+          async execute(args) {
+            try {
+              return await client.callTool(tool.name, args);
+            } catch (err) {
+              return { error: `MCP tool error: ${err instanceof Error ? err.message : String(err)}` };
+            }
+          },
+        });
+      }
+    }).catch(() => {});
+  }
+}
+
+// --- MCP API endpoints ---
+app.get('/api/mcp/servers', requireAuth, (_req, res) => {
+  const servers = loadMcpConfig();
+  const statuses = servers.map(s => ({
+    ...s,
+    connected: mcpClients.has(s.name) && mcpClients.get(s.name)!.isConnected,
+  }));
+  res.json(statuses);
+});
+
+app.post('/api/mcp/servers', requireAuth, (req, res) => {
+  const { servers } = req.body;
+  if (!Array.isArray(servers)) return res.status(400).json({ error: 'servers array required' });
+  saveMcpConfig(servers);
+  res.json({ ok: true, count: servers.length });
+});
+
+app.post('/api/mcp/connect', requireAuth, async (_req, res) => {
+  // Disconnect existing
+  for (const [, client] of mcpClients) { client.disconnect(); }
+  mcpClients.clear();
+  // Reconnect
+  await initMcpServers();
+  const status = Array.from(mcpClients.entries()).map(([name, c]) => ({ name, connected: c.isConnected }));
+  res.json({ ok: true, servers: status });
+});
+
+app.get('/api/mcp/tools', requireAuth, async (_req, res) => {
+  const allMcpTools: Array<{ server: string; name: string; description: string }> = [];
+  for (const [serverName, client] of mcpClients) {
+    if (!client.isConnected) continue;
+    try {
+      const tools = await client.listTools();
+      for (const t of tools) {
+        allMcpTools.push({ server: serverName, name: t.name, description: t.description });
+      }
+    } catch { /* skip */ }
+  }
+  res.json(allMcpTools);
+});
+
+// ============================================================================
 // SERVER STARTUP
 // ============================================================================
 
@@ -1566,8 +1978,13 @@ server.listen(PORT, () => {
   console.log(`  Skills: ${Array.from(allSkills.keys()).join(', ')}`);
   console.log(`  Database: ${dbPath}`);
 
-  // Auto-start Telegram polling if configured
+  // Auto-start channel polling if configured
   try { startTelegramPolling(); } catch (e) { console.log('  [TG] Auto-start skipped:', e); }
+  try { startDiscordPolling(); } catch (e) { console.log('  [DC] Auto-start skipped:', e); }
+  try { startSlackPolling(); } catch (e) { console.log('  [SL] Auto-start skipped:', e); }
+
+  // Auto-connect MCP servers
+  initMcpServers().catch(e => console.log('  [MCP] Auto-connect skipped:', e));
 
   console.log('');
 });
