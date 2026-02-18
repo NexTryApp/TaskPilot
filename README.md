@@ -8,6 +8,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.3+-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white" alt="Node.js 18+">
   <img src="https://img.shields.io/badge/LLM_Providers-16+-orange" alt="16+ LLM Providers">
+  <a href="https://www.buymeacoffee.com/civitaisaml"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee"></a>
 </p>
 
 AI agents that **can't** nuke your system. Built-in command security, LLM-powered explanations, skill-based access control, approval workflows, encrypted settings, and one-click launch.
@@ -479,8 +480,7 @@ Please check the [Good First Issues](../../issues?q=is%3Aissue+is%3Aopen+label%3
 
 If TaskPilot helps your work, consider supporting development:
 
-<!-- TODO: Replace with your actual Buy Me a Coffee username -->
-<a href="https://buymeacoffee.com/nextryapp"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee"></a>
+<a href="https://www.buymeacoffee.com/civitaisaml" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-violet.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;"></a>
 
 ---
 
