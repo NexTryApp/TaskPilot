@@ -135,6 +135,10 @@
                 <label>Server ID <span class="opt">(optional)</span></label>
                 <input type="text" id="dc-server" placeholder="123456789012345678">
               </div>
+              <div class="form-group">
+                <label>Channel ID <span class="req">*</span> <small>(for auto-responder)</small></label>
+                <input type="text" id="dc-channel" placeholder="Right-click channel → Copy Channel ID">
+              </div>
             </div>
             <div class="ch-connection" id="ch-discord-conn"></div>
             <div class="ch-permissions" id="ch-discord-perms"></div>
@@ -200,6 +204,10 @@
               <div class="form-group">
                 <label>Signing Secret <span class="opt">(optional)</span></label>
                 <input type="password" id="sl-secret" placeholder="abc123..." autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label>Channel ID <span class="req">*</span> <small>(for auto-responder)</small></label>
+                <input type="text" id="sl-channel" placeholder="C01234567 — right-click channel → View channel details">
               </div>
             </div>
             <div class="ch-connection" id="ch-slack-conn"></div>

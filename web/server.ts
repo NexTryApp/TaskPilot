@@ -924,10 +924,12 @@ app.post('/api/settings', requireAuth, (req, res) => {
   if (apiKey) {
     repo.setSecret('apiKey', apiKey);
   }
-  // Save other settings as plain text
+  // Save other settings (strings as-is, objects as JSON)
   for (const [key, value] of Object.entries(rest)) {
     if (typeof value === 'string') {
       repo.setSetting(key, value);
+    } else if (value !== null && value !== undefined) {
+      repo.setSetting(key, JSON.stringify(value));
     }
   }
   res.json({ ok: true });

@@ -277,8 +277,10 @@ async function saveSettings() {
   const settings = {
     apiKey: apiKeyInput.value.trim(),
     provider: selectedProvider,
+    baseUrl: selectedBaseUrl,
     model: getSelectedModel(),
     skill: selectedSkill,
+    channels: collectChannelCredentials(),
     userName: (document.getElementById('userName')?.value || '').trim(),
     userNotes: (document.getElementById('userNotes')?.value || '').trim(),
     contextMaxMessages: document.getElementById('contextMaxMessages')?.value || '30',
@@ -1052,6 +1054,7 @@ function collectChannelCredentials() {
     channels.discord = {
       botToken: document.getElementById('dc-token')?.value.trim(),
       serverId: document.getElementById('dc-server')?.value.trim(),
+      channelId: document.getElementById('dc-channel')?.value.trim(),
     };
   }
   if (document.getElementById('ch-whatsapp')?.checked) {
@@ -1064,6 +1067,7 @@ function collectChannelCredentials() {
     channels.slack = {
       botToken: document.getElementById('sl-token')?.value.trim(),
       signingSecret: document.getElementById('sl-secret')?.value.trim(),
+      channelId: document.getElementById('sl-channel')?.value.trim(),
     };
   }
   if (document.getElementById('ch-browser')?.checked) {
