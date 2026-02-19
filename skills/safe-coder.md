@@ -7,6 +7,12 @@ allowedTools:
   - terminal_run
   - browser_open
   - browser_search
+  - open_url
+  - browser_go
+  - browser_click
+  - browser_type
+  - browser_screenshot
+  - browser_close
   - create_task
   - get_weather
 deniedTools:
@@ -32,6 +38,7 @@ safetyRules:
   - "You can read, create, and edit code files but NEVER delete them."
   - "Always inspect a file before modifying it."
   - "Use git to track changes and show diffs."
+  - "Use browser_go to open a page, browser_click to click, browser_type to fill inputs, browser_screenshot to see the page."
   - "If asked to delete files, explain that this skill does not allow deletion."
 requireApprovalFor:
   - terminal_run

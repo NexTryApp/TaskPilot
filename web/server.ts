@@ -1756,6 +1756,10 @@ function startTelegramPolling(): void {
           const { policy } = skillToAccessPolicy(skill);
           toolRegistry.setAccessPolicy(policy);
 
+          // Debug: log registered tools
+          const registeredDefs = toolRegistry.getDefinitions();
+          console.log(`  [TG] Tools registered: ${registeredDefs.length} — ${registeredDefs.map(t => t.name).join(', ')}`);
+
           const memory = new BufferMemory();
           const llm = new OpenAIAdapter({
             model: mdl,
@@ -1772,6 +1776,8 @@ function startTelegramPolling(): void {
           const tgBasePrompt = 'You are a helpful AI assistant responding to Telegram messages. Be concise.\n\nCRITICAL RULE: You MUST ALWAYS reply in the SAME language the user writes in. If the user writes in Russian — reply in Russian. If in English — reply in English. Even if fetched content is in another language, translate your answer to the user\'s language. Never switch languages.\n\nIMPORTANT: You have access to REAL tools — use them! When the user asks you to open a website, click buttons, fill forms, or interact with a web page, you MUST use your browser automation tools (browser_go, browser_click, browser_type, browser_screenshot). Do NOT just describe what to do — actually DO it by calling the tools. After performing browser actions, use browser_screenshot to see the result and report back to the user what you see on the page.';
           const tgSkillAddition = skillToSystemPromptAddition(skill);
           const tgFullPrompt = tgBasePrompt + tgSkillAddition;
+          console.log(`  [TG] System prompt length: ${tgFullPrompt.length} chars`);
+          console.log(`  [TG] Skill addition: ${tgSkillAddition.slice(0, 200)}...`);
 
           const state = await runAgentLoop(
             { goal: goalText, runId },
@@ -1779,6 +1785,22 @@ function startTelegramPolling(): void {
             {
               maxSteps: 15,
               systemPrompt: tgFullPrompt,
+              onStep: (event) => {
+                const e = event as unknown as Record<string, unknown>;
+                if (event.type === 'thinking' && event.context === 'llm' && event.content !== 'LLM is processing...') {
+                  console.log(`  [TG] Step ${event.step}: LLM thought: ${String(event.content).slice(0, 150)}`);
+                } else if (event.type === 'tool_call') {
+                  console.log(`  [TG] Step ${event.step}: TOOL CALL → ${e.tool}(${JSON.stringify(e.args || {}).slice(0, 120)})`);
+                } else if (event.type === 'tool_result') {
+                  console.log(`  [TG] Step ${event.step}: tool result from ${e.tool} (${String(event.content).length} chars)`);
+                } else if (event.type === 'tool_denied') {
+                  console.log(`  [TG] Step ${event.step}: TOOL DENIED → ${e.tool}: ${e.error}`);
+                } else if (event.type === 'answer') {
+                  console.log(`  [TG] Step ${event.step}: FINAL ANSWER (${String(event.content).length} chars)`);
+                } else if (event.type !== 'thinking' && event.type !== 'status') {
+                  console.log(`  [TG] Step ${event.step}: ${event.type}`);
+                }
+              },
             }
           );
 
