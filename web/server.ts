@@ -1778,6 +1778,80 @@ function startTelegramPolling(): void {
 
         console.log(`  [TG] Message from ${userName}: ${userText.slice(0, 80)}`);
 
+        // --- /summary command: summarize conversation history ---
+        const summaryMatch = userText.match(/^\/summary(\d*)$/i);
+        if (summaryMatch) {
+          const count = parseInt(summaryMatch[1] || '20', 10);
+          const maxCount = Math.min(Math.max(count, 5), 100); // clamp 5..100
+          console.log(`  [TG] /summary command: last ${maxCount} messages`);
+
+          const history = repo.getChatHistory('tg', String(chatId), maxCount);
+          if (history.length === 0) {
+            await fetch(`${TG_API}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: 'Нет истории сообщений для суммаризации.' }),
+            }).catch(() => {});
+            continue;
+          }
+
+          // Format messages for LLM
+          const messagesText = history.map((m, i) =>
+            `${i + 1}. [${m.role === 'user' ? userName : 'Bot'}]: ${m.content}`
+          ).join('\n');
+
+          const summaryPrompt = `Ниже история переписки (${history.length} сообщений). Сделай подробную выжимку:
+1. Основные темы обсуждения
+2. Ключевые решения и действия
+3. Открытые вопросы (если есть)
+4. Краткий итог
+
+Отвечай на том же языке что и сообщения. Будь конкретен — цитируй факты, не обобщай.
+
+--- ИСТОРИЯ ---
+${messagesText}
+--- КОНЕЦ ---`;
+
+          try {
+            const llm = new OpenAIAdapter({
+              model: mdl,
+              baseUrl: bUrl.replace(/\/+$/, ''),
+              apiKey: key,
+            });
+            const summaryResp = await llm.chat(
+              [
+                { role: 'system', content: 'You are a conversation summarizer. Create detailed, structured summaries. Reply in the same language as the messages.' },
+                { role: 'user', content: summaryPrompt },
+              ],
+              [] // no tools needed
+            );
+            const summaryText = summaryResp.finalAnswer || summaryResp.thought || 'Не удалось создать саммари.';
+
+            // Send summary
+            await fetch(`${TG_API}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: `📋 Саммари (${history.length} сообщений):\n\n${summaryText}`, parse_mode: 'Markdown' }),
+            }).catch(async () => {
+              // Retry without Markdown
+              await fetch(`${TG_API}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text: `Саммари (${history.length} сообщений):\n\n${summaryText}` }),
+              }).catch(() => {});
+            });
+            console.log(`  [TG] Summary sent (${summaryText.length} chars, ${history.length} messages)`);
+          } catch (err) {
+            console.error(`  [TG] Summary error:`, err instanceof Error ? err.message : err);
+            await fetch(`${TG_API}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: 'Ошибка при создании саммари.' }),
+            }).catch(() => {});
+          }
+          continue; // skip normal agent processing
+        }
+
         // Run agent with the message as goal
         try {
           const enabledToolNames: string[] = [];
