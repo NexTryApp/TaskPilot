@@ -89,10 +89,23 @@ export function initDatabase(dbPath: string = DEFAULT_DB_PATH): Database.Databas
     )
   `);
 
+  // --- Chat messages table: persistent conversation history per channel/user ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel TEXT NOT NULL,
+      chat_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
   // --- Indexes ---
   db.exec(`CREATE INDEX IF NOT EXISTS idx_run_steps_run_id ON run_steps(run_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_security_events_run_id ON security_events(run_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_chat_messages_lookup ON chat_messages(channel, chat_id, created_at DESC)`);
 
   return db;
 }

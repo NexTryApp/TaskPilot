@@ -223,6 +223,40 @@ export class Repository {
     return result.changes > 0;
   }
 
+  // ============ CHAT MESSAGES (persistent conversation history) ============
+
+  /** Save a chat message (user or assistant). */
+  addChatMessage(channel: string, chatId: string, role: string, content: string): void {
+    this.db.prepare(
+      `INSERT INTO chat_messages (channel, chat_id, role, content) VALUES (?, ?, ?, ?)`
+    ).run(channel, chatId, role, content);
+  }
+
+  /** Get recent chat messages for a channel/user pair. Returns oldest first. */
+  getChatHistory(channel: string, chatId: string, limit = 20): Array<{ role: string; content: string; created_at: string }> {
+    const rows = this.db.prepare(
+      `SELECT role, content, created_at FROM chat_messages
+       WHERE channel = ? AND chat_id = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?`
+    ).all(channel, chatId, limit) as Array<{ role: string; content: string; created_at: string }>;
+    return rows.reverse(); // oldest first
+  }
+
+  /** Delete old chat messages, keeping only the last N per channel/user. */
+  trimChatHistory(channel: string, chatId: string, keep = 30): void {
+    this.db.prepare(
+      `DELETE FROM chat_messages
+       WHERE channel = ? AND chat_id = ?
+       AND id NOT IN (
+         SELECT id FROM chat_messages
+         WHERE channel = ? AND chat_id = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?
+       )`
+    ).run(channel, chatId, channel, chatId, keep);
+  }
+
   // ============ STATS ============
 
   getStats(): { totalRuns: number; totalBlocked: number; totalWarned: number; totalAllowed: number } {

@@ -1767,13 +1767,43 @@ function startTelegramPolling(): void {
             apiKey: key,
           });
 
-          const goalText = `User "${userName}" sent a Telegram message: "${userText}". Respond helpfully and concisely. Do NOT use telegram_send — your final answer will be sent automatically.`;
+          // Load conversation history from DB for this user
+          const chatHistory = repo.getChatHistory('tg', String(chatId), 20);
+          let historyContext = '';
+          if (chatHistory.length > 0) {
+            historyContext = 'Previous conversation with this user:\n' +
+              chatHistory.map(m => `${m.role === 'user' ? 'User' : 'You'}: ${m.content}`).join('\n') +
+              '\n\n---\n\n';
+            console.log(`  [TG] Loaded ${chatHistory.length} messages from history for chat ${chatId}`);
+          }
+
+          const goalText = `${historyContext}User "${userName}" sent a new Telegram message: "${userText}". Respond helpfully and concisely. Continue the conversation naturally based on previous context. Do NOT use telegram_send — your final answer will be sent automatically.`;
           const runId = `tg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
           repo.createRun(runId, goalText, skName);
 
           // Build system prompt with skill safety rules (same as /api/run)
-          const tgBasePrompt = 'You are a helpful AI assistant responding to Telegram messages. Be concise.\n\nCRITICAL RULE: You MUST ALWAYS reply in the SAME language the user writes in. If the user writes in Russian — reply in Russian. If in English — reply in English. Even if fetched content is in another language, translate your answer to the user\'s language. Never switch languages.\n\nIMPORTANT: You have access to REAL tools — use them! When the user asks you to open a website, click buttons, fill forms, or interact with a web page, you MUST use your browser automation tools (browser_go, browser_click, browser_type, browser_screenshot). Do NOT just describe what to do — actually DO it by calling the tools. After performing browser actions, use browser_screenshot to see the result and report back to the user what you see on the page.';
+          const tgBasePrompt = `You are a helpful AI assistant responding to Telegram messages.
+
+CRITICAL RULE: You MUST ALWAYS reply in the SAME language the user writes in. If the user writes in Russian — reply in Russian. If in English — reply in English. Even if fetched content is in another language, translate your answer to the user's language. Never switch languages.
+
+IMPORTANT — TOOL USAGE:
+You have access to REAL browser automation tools — USE THEM for any web interaction:
+- browser_go: navigate to a URL (opens real Chrome window)
+- browser_click: click buttons, links, menu items by their visible text
+- browser_type: fill input fields
+- browser_screenshot: see what's on the page (returns page elements, links, buttons, text)
+
+When the user asks you to open a website, click buttons, fill forms, or interact with a web page — DO it by calling tools. Do NOT just describe what to do.
+
+THOROUGH TESTING:
+When asked to "test" or "check" a website, you MUST:
+1. Use browser_go to open the site
+2. Use browser_screenshot to see all links and buttons
+3. Click through EACH major link/page (browser_click → browser_screenshot for each)
+4. Report what you found on EACH page — broken links, errors, missing content
+5. Do NOT stop after just looking at the homepage — visit at least 5-10 pages
+6. Be thorough — the user expects a real QA test, not a summary of the homepage`;
           const tgSkillAddition = skillToSystemPromptAddition(skill);
           const tgFullPrompt = tgBasePrompt + tgSkillAddition;
           console.log(`  [TG] System prompt length: ${tgFullPrompt.length} chars`);
@@ -1783,7 +1813,7 @@ function startTelegramPolling(): void {
             { goal: goalText, runId },
             memory, toolRegistry, llm, null,
             {
-              maxSteps: 15,
+              maxSteps: 25,
               systemPrompt: tgFullPrompt,
               onStep: (event) => {
                 const e = event as unknown as Record<string, unknown>;
@@ -1805,6 +1835,11 @@ function startTelegramPolling(): void {
           );
 
           const reply = state.finalAnswer || 'Sorry, I could not process your request.';
+
+          // Save conversation to DB (persistent memory)
+          repo.addChatMessage('tg', String(chatId), 'user', userText);
+          repo.addChatMessage('tg', String(chatId), 'assistant', reply);
+          repo.trimChatHistory('tg', String(chatId), 30);
 
           // Send reply — validate response
           const sendResp = await fetch(`${TG_API}/sendMessage`, {
