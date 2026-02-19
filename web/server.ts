@@ -1768,12 +1768,17 @@ function startTelegramPolling(): void {
 
           repo.createRun(runId, goalText, skName);
 
+          // Build system prompt with skill safety rules (same as /api/run)
+          const tgBasePrompt = 'You are a helpful AI assistant responding to Telegram messages. Be concise.\n\nCRITICAL RULE: You MUST ALWAYS reply in the SAME language the user writes in. If the user writes in Russian — reply in Russian. If in English — reply in English. Even if fetched content is in another language, translate your answer to the user\'s language. Never switch languages.\n\nIMPORTANT: You have access to REAL tools — use them! When the user asks you to open a website, click buttons, fill forms, or interact with a web page, you MUST use your browser automation tools (browser_go, browser_click, browser_type, browser_screenshot). Do NOT just describe what to do — actually DO it by calling the tools. After performing browser actions, use browser_screenshot to see the result and report back to the user what you see on the page.';
+          const tgSkillAddition = skillToSystemPromptAddition(skill);
+          const tgFullPrompt = tgBasePrompt + tgSkillAddition;
+
           const state = await runAgentLoop(
             { goal: goalText, runId },
             memory, toolRegistry, llm, null,
             {
-              maxSteps: 8,
-              systemPrompt: 'You are a helpful AI assistant responding to Telegram messages. Be concise. CRITICAL RULE: You MUST ALWAYS reply in the SAME language the user writes in. If the user writes in Russian — reply in Russian. If in English — reply in English. Even if fetched content is in another language, translate your answer to the user\'s language. Never switch languages.',
+              maxSteps: 15,
+              systemPrompt: tgFullPrompt,
             }
           );
 
@@ -1980,10 +1985,15 @@ function startDiscordPolling(): void {
           const runId = `dc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
           repo.createRun(runId, goalText, skName);
 
+          // Build system prompt with skill safety rules
+          const dcBasePrompt = 'You are a helpful AI assistant in a Discord channel. Be concise. CRITICAL RULE: You MUST ALWAYS reply in the SAME language the user writes in.\n\nIMPORTANT: You have access to REAL tools — use them! When the user asks you to open a website, click buttons, fill forms, or interact with a web page, you MUST use your browser automation tools (browser_go, browser_click, browser_type, browser_screenshot). Do NOT just describe what to do — actually DO it by calling the tools.';
+          const dcSkillAddition = skillToSystemPromptAddition(skill);
+          const dcFullPrompt = dcBasePrompt + dcSkillAddition;
+
           const state = await runAgentLoop(
             { goal: goalText, runId },
             memory, toolRegistry, llm, null,
-            { maxSteps: 8, systemPrompt: 'You are a helpful AI assistant in a Discord channel. Be concise. Answer in the same language the user writes in.' }
+            { maxSteps: 15, systemPrompt: dcFullPrompt }
           );
 
           const reply = state.finalAnswer || 'Sorry, I could not process your request.';
@@ -2155,10 +2165,15 @@ function startSlackPolling(): void {
           const runId = `sl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
           repo.createRun(runId, goalText, skName);
 
+          // Build system prompt with skill safety rules
+          const slBasePrompt = 'You are a helpful AI assistant in a Slack channel. Be concise. CRITICAL RULE: You MUST ALWAYS reply in the SAME language the user writes in.\n\nIMPORTANT: You have access to REAL tools — use them! When the user asks you to open a website, click buttons, fill forms, or interact with a web page, you MUST use your browser automation tools (browser_go, browser_click, browser_type, browser_screenshot). Do NOT just describe what to do — actually DO it by calling the tools.';
+          const slSkillAddition = skillToSystemPromptAddition(skill);
+          const slFullPrompt = slBasePrompt + slSkillAddition;
+
           const state = await runAgentLoop(
             { goal: goalText, runId },
             memory, toolRegistry, llm, null,
-            { maxSteps: 8, systemPrompt: 'You are a helpful AI assistant in a Slack channel. Be concise. Answer in the same language the user writes in.' }
+            { maxSteps: 15, systemPrompt: slFullPrompt }
           );
 
           const reply = state.finalAnswer || 'Sorry, I could not process your request.';
