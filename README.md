@@ -1,3 +1,5 @@
+<p align="center">If this project helps you, you can support it <a href="https://www.buymeacoffee.com/civitaisaml">here</a> or simply ⭐ the repo</p>
+
 <p align="center">
   <h1 align="center">TaskPilot</h1>
   <p align="center">Security-first AI agent framework</p>
