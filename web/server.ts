@@ -555,12 +555,26 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
           const page = await getBrowserPage();
           await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
           const title = await page.title();
-          // Get visible text content (trimmed)
-          const text = await page.evaluate(() => {
-            const el = document.body;
-            return el ? el.innerText.slice(0, 3000) : '';
+          // Get interactive elements + visible text
+          const elements = await page.evaluate(() => {
+            const items: string[] = [];
+            document.querySelectorAll('button, [role="button"], input[type="submit"]').forEach((el) => {
+              const txt = (el as HTMLElement).innerText?.trim() || (el as HTMLInputElement).value?.trim() || '';
+              if (txt) items.push(`[Button] "${txt}"`);
+            });
+            document.querySelectorAll('a[href]').forEach((el) => {
+              const txt = (el as HTMLElement).innerText?.trim() || '';
+              if (txt && txt.length < 80) items.push(`[Link] "${txt}" → ${(el as HTMLAnchorElement).href}`);
+            });
+            document.querySelectorAll('input, textarea, select').forEach((el) => {
+              const input = el as HTMLInputElement;
+              const ph = input.placeholder || input.name || input.id || input.type;
+              items.push(`[Input] ${ph} (${input.type || 'text'})`);
+            });
+            return items.slice(0, 50);
           });
-          return { url, title, contentPreview: text, opened: true };
+          const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 3000) || '');
+          return { url, title, interactiveElements: elements, visibleText, opened: true };
         } catch (err) {
           return { url, error: err instanceof Error ? err.message : String(err) };
         }
@@ -593,10 +607,29 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
             await page.click(selector, { timeout: 5000 });
           }
           // Wait for navigation/content to settle
-          await page.waitForTimeout(1000);
+          await page.waitForTimeout(1500);
           const title = await page.title();
           const currentUrl = page.url();
-          return { clicked: text || selector, currentUrl, title };
+          // Auto-capture page content after click (saves a separate screenshot step)
+          const elements = await page.evaluate(() => {
+            const items: string[] = [];
+            document.querySelectorAll('button, [role="button"], input[type="submit"]').forEach((el) => {
+              const txt = (el as HTMLElement).innerText?.trim() || (el as HTMLInputElement).value?.trim() || '';
+              if (txt) items.push(`[Button] "${txt}"`);
+            });
+            document.querySelectorAll('a[href]').forEach((el) => {
+              const txt = (el as HTMLElement).innerText?.trim() || '';
+              if (txt && txt.length < 80) items.push(`[Link] "${txt}" → ${(el as HTMLAnchorElement).href}`);
+            });
+            document.querySelectorAll('input, textarea, select').forEach((el) => {
+              const input = el as HTMLInputElement;
+              const ph = input.placeholder || input.name || input.id || input.type;
+              items.push(`[Input] ${ph} (${input.type || 'text'})`);
+            });
+            return items.slice(0, 50);
+          });
+          const visibleText = await page.evaluate(() => document.body?.innerText?.slice(0, 2000) || '');
+          return { clicked: text || selector, currentUrl, title, interactiveElements: elements, visibleText };
         } catch (err) {
           return { error: err instanceof Error ? err.message : String(err), hint: 'Element not found or not clickable. Try a different text or CSS selector.' };
         }
@@ -681,7 +714,9 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
           const visibleText = await page.evaluate(() => {
             return document.body?.innerText?.slice(0, 2000) || '';
           });
-          return { title, url: currentUrl, interactiveElements: elements, visibleText };
+          const result = { title, url: currentUrl, interactiveElements: elements, visibleText };
+          console.log(`  [BROWSER] screenshot: ${title} | ${elements.length} elements | ${visibleText.length} chars text`);
+          return result;
         } catch (err) {
           return { error: err instanceof Error ? err.message : String(err) };
         }
