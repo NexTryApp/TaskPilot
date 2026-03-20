@@ -218,26 +218,52 @@ function checkSsrf(urlStr: string): string | null {
       return `Blocked: only http/https URLs allowed (got ${parsed.protocol})`;
     }
 
-    const host = parsed.hostname.toLowerCase();
+    // Strip IPv6 brackets for checking: "[::1]" → "::1"
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
 
     // Block cloud metadata endpoints
     if (host === '169.254.169.254' || host === 'metadata.google.internal') {
       return 'Blocked: cloud metadata endpoint (SSRF protection)';
     }
 
-    // Block localhost / loopback
-    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0') {
+    // Block localhost / loopback (IPv4 + IPv6)
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') {
       return 'Blocked: localhost/loopback address (SSRF protection)';
     }
 
-    // Block private IP ranges (10.x, 172.16-31.x, 192.168.x)
+    // --- IPv6 checks ---
+    if (host === '::1' || host === '::' || host === '0:0:0:0:0:0:0:1' || host === '0:0:0:0:0:0:0:0') {
+      return 'Blocked: IPv6 loopback/unspecified (SSRF protection)';
+    }
+    // IPv6-mapped IPv4: ::ffff:127.0.0.1, ::ffff:10.x.x.x, etc.
+    const mappedMatch = host.match(/^::ffff:(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (mappedMatch) {
+      const [, a, b] = mappedMatch.map(Number);
+      if (a === 127) return 'Blocked: IPv6-mapped loopback (SSRF protection)';
+      if (a === 10) return 'Blocked: IPv6-mapped private 10.0.0.0/8 (SSRF protection)';
+      if (a === 172 && b >= 16 && b <= 31) return 'Blocked: IPv6-mapped private 172.16.0.0/12 (SSRF protection)';
+      if (a === 192 && b === 168) return 'Blocked: IPv6-mapped private 192.168.0.0/16 (SSRF protection)';
+      if (a === 169 && b === 254) return 'Blocked: IPv6-mapped link-local (SSRF protection)';
+    }
+    // IPv6 link-local (fe80::)
+    if (host.startsWith('fe80:') || host.startsWith('fe80%')) {
+      return 'Blocked: IPv6 link-local fe80::/10 (SSRF protection)';
+    }
+    // IPv6 unique local (fc00::/7 = fc00:: and fd00::)
+    if (host.startsWith('fc') || host.startsWith('fd')) {
+      return 'Blocked: IPv6 unique-local fc00::/7 (SSRF protection)';
+    }
+
+    // Block private IPv4 ranges (10.x, 172.16-31.x, 192.168.x)
     const ipv4Match = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
     if (ipv4Match) {
       const [, a, b] = ipv4Match.map(Number);
+      if (a === 127) return 'Blocked: loopback 127.0.0.0/8 (SSRF protection)';
       if (a === 10) return 'Blocked: private network 10.0.0.0/8 (SSRF protection)';
       if (a === 172 && b >= 16 && b <= 31) return 'Blocked: private network 172.16.0.0/12 (SSRF protection)';
       if (a === 192 && b === 168) return 'Blocked: private network 192.168.0.0/16 (SSRF protection)';
       if (a === 169 && b === 254) return 'Blocked: link-local 169.254.0.0/16 (SSRF protection)';
+      if (a === 0) return 'Blocked: unspecified 0.0.0.0/8 (SSRF protection)';
     }
 
     return null; // URL is safe
@@ -508,23 +534,32 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
         const url = String(args['url'] || '');
         if (!url) return { error: 'URL is required' };
 
-        // Basic URL validation
-        try { new URL(url); } catch { return { error: `Invalid URL: ${url}` }; }
+        // URL validation — only allow http/https (block javascript:, file:, data:)
+        let parsed: URL;
+        try { parsed = new URL(url); } catch { return { error: `Invalid URL: ${url}` }; }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return { error: `Blocked: only http/https URLs allowed (got ${parsed.protocol})` };
+        }
 
-        const { exec } = await import('child_process');
+        // Use execFile (not exec) to prevent shell metacharacter injection
+        const { execFile } = await import('child_process');
         const platform = process.platform;
 
-        let cmd: string;
+        let bin: string;
+        let binArgs: string[];
         if (platform === 'win32') {
-          cmd = `start "" "${url}"`;
+          bin = 'cmd.exe';
+          binArgs = ['/c', 'start', '', url];
         } else if (platform === 'darwin') {
-          cmd = `open "${url}"`;
+          bin = 'open';
+          binArgs = [url];
         } else {
-          cmd = `xdg-open "${url}"`;
+          bin = 'xdg-open';
+          binArgs = [url];
         }
 
         return new Promise((resolve) => {
-          exec(cmd, { timeout: 5000 }, (err) => {
+          execFile(bin, binArgs, { timeout: 5000 }, (err) => {
             if (err) {
               resolve({ url, opened: false, error: err.message });
             } else {

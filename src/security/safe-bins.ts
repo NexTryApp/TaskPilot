@@ -8,7 +8,8 @@
 export const SAFE_BINS: Set<string> = new Set([
   // Text processing (read-only, stdin/stdout)
   'cat', 'head', 'tail', 'grep', 'egrep', 'fgrep',
-  'awk', 'sed', 'sort', 'uniq', 'wc', 'cut', 'tr',
+  // REMOVED: 'awk' — can execute shell commands via system() and write files via print >
+  'sed', 'sort', 'uniq', 'wc', 'cut', 'tr',
   'less', 'more', 'jq', 'yq',
   // REMOVED: 'tee' — writes to files, 'xargs' — can execute arbitrary commands
 
@@ -41,15 +42,16 @@ export const SAFE_BINS: Set<string> = new Set([
 /** Flags on safe bins that make them dangerous. */
 const DANGEROUS_FLAGS: Record<string, RegExp[]> = {
   find: [/-exec\b/, /-delete\b/, /-ok\b/],
-  sed: [/-i\b/],   // in-place editing
+  sed: [/-i\b/, /--in-place\b/],   // in-place editing (short + GNU long form)
   xargs: [/rm\b/, /del\b/, /rmdir\b/],
 };
 
 /** Git subcommands that are safe (read-only). */
 const SAFE_GIT_SUBCOMMANDS = new Set([
   'status', 'log', 'diff', 'branch', 'tag', 'show',
-  'remote', 'config', 'stash', 'ls-files', 'ls-tree',
+  'remote', 'stash', 'ls-files', 'ls-tree',
   'rev-parse', 'describe', 'shortlog', 'blame', 'reflog',
+  // REMOVED: 'config' — `git config key value` WRITES to config (user.name, hooks, etc.)
 ]);
 
 /**
@@ -71,16 +73,13 @@ export function isSafeBinCommand(command: string): boolean {
     return SAFE_GIT_SUBCOMMANDS.has(subcommand);
   }
 
-  // Special handling for node/python with --version
+  // Special handling for node/python — only --version/--help is safe
+  // SECURITY: bare `node`/`python3` opens an interactive REPL that allows arbitrary code execution
   if (['node', 'python', 'python3', 'ruby', 'go', 'tsc', 'npx', 'pnpm', 'yarn', 'bun'].includes(executable)) {
     const arg = tokens[1]?.toLowerCase();
-    if (!arg) return true; // just the binary name
+    if (!arg) return false; // bare binary = REPL / interactive prompt — NOT safe
     if (arg === '--version' || arg === '-v' || arg === '--help' || arg === '-h') return true;
-    if (executable === 'npx' || executable === 'pnpm' || executable === 'yarn' || executable === 'bun') {
-      // npx/pnpm/yarn can execute arbitrary code
-      return false;
-    }
-    return false; // running scripts is not safe
+    return false; // running scripts or packages is not safe
   }
 
   // Check against safe bins set

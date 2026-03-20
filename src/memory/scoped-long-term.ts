@@ -34,7 +34,7 @@ export class ScopedLongTermMemoryImpl implements ScopedLongTermMemory {
     const scored = entries
       .filter((e) => e.content.toLowerCase().includes(q))
       .map((e) => ({ entry: e, score: e.content.toLowerCase().split(q).length - 1 }))
-      .sort((a, b) => a.score - b.score)
+      .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ entry }) => entry);
     return scored;

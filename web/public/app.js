@@ -1243,21 +1243,21 @@ function addActivity(event) {
 
   switch (event.type) {
     case 'thinking':
-      icon = '\u{1F4AD}'; body = `<span class="fe-body">${truncate(event.content, 200)}</span>`; break;
+      icon = '\u{1F4AD}'; body = `<span class="fe-body">${escapeHtml(truncate(event.content, 200))}</span>`; break;
     case 'tool_call':
-      icon = '\u{1F527}'; body = `<span class="fe-body">${wsIcon}Calling <span class="fe-tool">${event.tool}</span><span class="fe-args">${event.workspace?.location || truncate(JSON.stringify(event.args), 120)}</span></span>`; break;
+      icon = '\u{1F527}'; body = `<span class="fe-body">${wsIcon}Calling <span class="fe-tool">${escapeHtml(event.tool)}</span><span class="fe-args">${escapeHtml(event.workspace?.location || truncate(JSON.stringify(event.args), 120))}</span></span>`; break;
     case 'tool_result':
-      icon = '\u2705'; body = `<span class="fe-body">${wsIcon}<span class="fe-tool">${event.tool}</span> returned<span class="fe-result">${truncate(event.content || event.result, 200)}</span></span>`; break;
+      icon = '\u2705'; body = `<span class="fe-body">${wsIcon}<span class="fe-tool">${escapeHtml(event.tool)}</span> returned<span class="fe-result">${escapeHtml(truncate(event.content || event.result, 200))}</span></span>`; break;
     case 'tool_denied':
-      icon = '\u{1F6AB}'; body = `<span class="fe-body"><span class="fe-tool">${event.tool}</span> DENIED: ${event.error}</span>`; break;
+      icon = '\u{1F6AB}'; body = `<span class="fe-body"><span class="fe-tool">${escapeHtml(event.tool)}</span> DENIED: ${escapeHtml(event.error)}</span>`; break;
     case 'answer':
       icon = '\u2714\uFE0F'; body = `<span class="fe-body">Final answer ready</span>`; break;
     case 'status':
-      icon = '\u2139\uFE0F'; body = `<span class="fe-body">${event.content}</span>`; break;
+      icon = '\u2139\uFE0F'; body = `<span class="fe-body">${escapeHtml(event.content)}</span>`; break;
     case 'error':
-      icon = '\u274C'; body = `<span class="fe-body">${event.error || event.content}</span>`; break;
+      icon = '\u274C'; body = `<span class="fe-body">${escapeHtml(event.error || event.content)}</span>`; break;
     default:
-      icon = '\u2022'; body = `<span class="fe-body">${JSON.stringify(event)}</span>`;
+      icon = '\u2022'; body = `<span class="fe-body">${escapeHtml(JSON.stringify(event))}</span>`;
   }
   div.innerHTML = `${time}<span class="fe-icon">${icon}</span>${body}`;
   activityFeed.appendChild(div);
@@ -1269,7 +1269,7 @@ function addThought(step, content) {
   if (ph) ph.remove();
   const div = document.createElement('div');
   div.className = 'thought-bubble';
-  div.innerHTML = `<div class="tb-step">Step ${step}</div>${content}`;
+  div.innerHTML = `<div class="tb-step">Step ${step}</div>${escapeHtml(content)}`;
   thoughtsFeed.appendChild(div);
   thoughtsFeed.scrollTop = thoughtsFeed.scrollHeight;
 }
