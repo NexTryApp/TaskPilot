@@ -203,9 +203,10 @@ async function loadSavedSettings() {
     const resp = await fetch('/api/settings', { headers: authHeaders() });
     if (!resp.ok) return;
     const settings = await resp.json();
-    // Restore API key
-    if (settings.apiKey) {
-      apiKeyInput.value = settings.apiKey;
+    // Show masked API key placeholder if key is saved on server
+    if (settings.hasApiKey && settings.apiKey) {
+      apiKeyInput.value = '';
+      apiKeyInput.placeholder = `Saved: ${settings.apiKey}`;
     }
     // Restore provider
     if (settings.provider) {
@@ -274,8 +275,10 @@ async function loadSavedSettings() {
 }
 
 async function saveSettings() {
+  // Only send apiKey if the user typed a new one (don't overwrite stored key with empty/placeholder)
+  const newKey = apiKeyInput.value.trim();
   const settings = {
-    apiKey: apiKeyInput.value.trim(),
+    apiKey: newKey || undefined,
     provider: selectedProvider,
     baseUrl: selectedBaseUrl,
     model: getSelectedModel(),
@@ -926,8 +929,9 @@ allChannelCards.forEach(card => {
 document.getElementById('btnNext1').addEventListener('click', () => {
   const apiKey = apiKeyInput.value.trim();
   const model = getSelectedModel();
-
-  if (!apiKey && selectedProvider !== 'ollama') return alert('Enter API Key');
+  // Allow empty key if a key is already saved on the server
+  const hasSavedKey = apiKeyInput.placeholder.startsWith('Saved:');
+  if (!apiKey && !hasSavedKey && selectedProvider !== 'ollama') return alert('Enter API Key');
   if (!model) return alert('Select a model');
 
   // Save settings to DB (non-blocking)
@@ -1026,7 +1030,7 @@ document.getElementById('btnStart').addEventListener('click', async () => {
 function collectConfig() {
   return {
     baseUrl: selectedBaseUrl,
-    apiKey: apiKeyInput.value.trim(),
+    apiKey: apiKeyInput.value.trim() || 'use-stored',
     model: getSelectedModel(),
     maxSteps: parseInt(document.getElementById('maxSteps').value) || 15,
     maxTokens: parseInt(document.getElementById('maxTokens').value) || 0,

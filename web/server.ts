@@ -1193,11 +1193,43 @@ app.post('/api/approval/:id', requireAuth, (req, res) => {
 });
 
 // --- Settings ---
+
+/** Mask a secret for display: show prefix + last 4 chars. Never return full secret to the client. */
+function maskSecret(value: string, prefixLen = 4): string {
+  if (!value) return '';
+  if (value.length <= prefixLen + 4) return '***';
+  return `${value.slice(0, prefixLen)}...${value.slice(-4)}`;
+}
+
+/** Mask tokens inside a channels JSON config object. */
+function maskChannelSecrets(channelsJson: string | null): string | null {
+  if (!channelsJson) return null;
+  try {
+    const channels = JSON.parse(channelsJson) as Record<string, Record<string, unknown>>;
+    for (const ch of Object.values(channels)) {
+      if (typeof ch !== 'object' || !ch) continue;
+      for (const key of ['botToken', 'accessToken', 'pass', 'secret']) {
+        if (typeof ch[key] === 'string' && (ch[key] as string).length > 0) {
+          ch[key] = maskSecret(ch[key] as string);
+        }
+      }
+    }
+    return JSON.stringify(channels);
+  } catch {
+    return channelsJson;
+  }
+}
+
 app.get('/api/settings', requireAuth, (_req, res) => {
   const settings = repo.getAllSettings();
-  // Also try to get saved API key (decrypted)
+  // Return masked API key — never send the full secret to the client
   const apiKey = repo.getSecret('apiKey');
-  res.json({ ...settings, apiKey: apiKey || '' });
+  const maskedKey = maskSecret(apiKey || '');
+  // Mask channel tokens (Telegram bot token, Discord token, etc.)
+  if (settings['channels']) {
+    settings['channels'] = maskChannelSecrets(settings['channels']) ?? settings['channels'];
+  }
+  res.json({ ...settings, apiKey: maskedKey, hasApiKey: !!apiKey });
 });
 
 app.post('/api/settings', requireAuth, (req, res) => {
@@ -1226,12 +1258,7 @@ app.post('/api/test-key', requireAuth, async (req, res) => {
   const chatUrl = `${base}/chat/completions`;
   const testModel = model || 'gpt-4o-mini';
 
-  // DEBUG: log what we're sending
-  console.log('[test-key] URL:', chatUrl);
-  console.log('[test-key] Model:', testModel);
-  console.log('[test-key] Key length:', apiKey.length);
-  console.log('[test-key] Key preview:', `${apiKey.slice(0, 10)}...${apiKey.slice(-6)}`);
-  console.log('[test-key] Key hex (first 20 chars):', Buffer.from(apiKey.slice(0, 20)).toString('hex'));
+  // REMOVED: debug logging that leaked API key material to console/logs
 
   try {
     const reqBody = {
@@ -1239,7 +1266,6 @@ app.post('/api/test-key', requireAuth, async (req, res) => {
       messages: [{ role: 'user', content: 'Say "ok"' }],
       max_tokens: 3,
     };
-    console.log('[test-key] Request body:', JSON.stringify(reqBody));
 
     const resp = await fetch(chatUrl, {
       method: 'POST',
@@ -1251,23 +1277,16 @@ app.post('/api/test-key', requireAuth, async (req, res) => {
       signal: AbortSignal.timeout(15000),
     });
 
-    console.log('[test-key] Response status:', resp.status);
-    console.log('[test-key] Response headers:', Object.fromEntries(resp.headers.entries()));
-
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
-      console.log('[test-key] Error body:', body);
       let errorMsg = `API returned ${resp.status}: ${body.slice(0, 500)}`;
-      if (resp.status === 401) errorMsg = `401 Unauthorized. Raw response: ${body.slice(0, 300)}`;
+      if (resp.status === 401) errorMsg = '401 Unauthorized. Check your API key.';
       if (resp.status === 429) errorMsg = 'Rate limit or quota exceeded (429). Check your billing and usage limits.';
       if (resp.status === 404) errorMsg = `Model "${testModel}" not found (404). Try a different model.`;
       return res.json({
         ok: false,
         status: resp.status,
         error: errorMsg,
-        rawKey: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`,
-        keyLength: apiKey.length,
-        url: chatUrl,
       });
     }
 
@@ -1277,7 +1296,6 @@ app.post('/api/test-key', requireAuth, async (req, res) => {
       ok: true,
       model: data.model || testModel,
       reply: reply.trim(),
-      rawKey: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1355,7 +1373,16 @@ app.post('/api/run', requireAuth, async (req, res) => {
 
   const uniqueTools = [...new Set(enabledToolNames)];
 
-  if (!apiKey || !model || !goal) {
+  // Resolve API key: if client sent a placeholder or empty, use stored key from DB
+  let resolvedApiKey = apiKey;
+  if (!apiKey || apiKey === 'use-stored' || apiKey.includes('...') || apiKey === '***') {
+    const storedKey = repo.getSecret('apiKey');
+    if (storedKey) {
+      resolvedApiKey = storedKey;
+    }
+  }
+
+  if (!resolvedApiKey || !model || !goal) {
     return res.status(400).json({ error: 'apiKey, model and goal are required' });
   }
 
@@ -1447,7 +1474,7 @@ app.post('/api/run', requireAuth, async (req, res) => {
   const memory = new BufferMemory();
   const llm = new OpenAIAdapter({
     baseUrl: baseUrl || undefined,
-    apiKey,
+    apiKey: resolvedApiKey,
     model,
   });
 

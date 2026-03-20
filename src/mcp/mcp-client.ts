@@ -330,7 +330,7 @@ export class McpClient {
     }
 
     const result = (await this.request('tools/list', {})) as { tools: McpTool[] };
-    const tools: McpTool[] = (result.tools ?? []).map((t: Record<string, unknown>) => ({
+    const tools: McpTool[] = (result.tools ?? []).map((t) => ({
       name: t.name as string,
       description: (t.description as string) ?? '',
       inputSchema: (t.inputSchema as Record<string, unknown>) ?? {},
