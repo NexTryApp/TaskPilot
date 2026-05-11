@@ -9,10 +9,15 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "4242:4242"
+      # SECURITY: bind to loopback only — TaskPilot is single-user, localhost-only.
+      # To expose to LAN, change to "0.0.0.0:4242:4242" AND ensure firewall/auth/TLS.
+      - "127.0.0.1:4242:4242"
     environment:
       - NODE_ENV=production
       - SANDBOX_URL=http://sandbox:3001
+      # Shared secret used to authenticate the main server to the sandbox.
+      # Override with a strong random value in a .env file at deploy time.
+      - SANDBOX_SECRET=${SANDBOX_SECRET:-change-me-set-in-env-file}
     volumes:
       - taskpilot-data:/app/data
     depends_on:
@@ -24,6 +29,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.sandbox
+    # Sandbox is not exposed to the host — only reachable from the `taskpilot`
+    # service over the docker bridge network. Inside the container it binds to
+    # 0.0.0.0 so the other service can reach it. Without `ports:` here, the
+    # port is NOT published outside docker-compose.
+    environment:
+      - SANDBOX_BIND=0.0.0.0
+      - SANDBOX_SECRET=${SANDBOX_SECRET:-change-me-set-in-env-file}
     volumes:
       - taskpilot-data:/app/data
     healthcheck:

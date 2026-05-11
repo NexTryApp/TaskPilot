@@ -165,13 +165,16 @@ function renderSkillGrid() {
     const card = document.createElement('div');
     card.className = `skill-card ${skill.securityLevel}${skill.key === selectedSkill ? ' selected' : ''}`;
     card.dataset.skill = skill.key;
+    // SECURITY: skill.name/description/icon may come from custom skills in DB
+    // (POST /api/skills) or from arbitrary .md files — escape everything.
+    const levelInfo = SECURITY_LEVEL_LABELS[skill.securityLevel] || {};
     card.innerHTML = `
       <div class="skill-card-top">
-        <span class="skill-card-icon">${skill.icon || '\u{1F916}'}</span>
-        <span class="skill-card-name">${skill.name}</span>
+        <span class="skill-card-icon">${escapeHtml(skill.icon || '\u{1F916}')}</span>
+        <span class="skill-card-name">${escapeHtml(skill.name)}</span>
       </div>
-      <div class="skill-card-desc">${skill.description}</div>
-      <div class="skill-card-level ${skill.securityLevel}">${SECURITY_LEVEL_LABELS[skill.securityLevel]?.text || skill.securityLevel}</div>
+      <div class="skill-card-desc">${escapeHtml(skill.description)}</div>
+      <div class="skill-card-level ${escapeHtml(skill.securityLevel)}">${escapeHtml(levelInfo.text || skill.securityLevel)}</div>
     `;
     card.addEventListener('click', () => selectSkill(skill.key));
     grid.appendChild(card);
@@ -319,12 +322,17 @@ function showApprovalModal(data) {
     cmdEl.textContent = cmd;
   }
   if (expEl) {
+    // SECURITY: approval reasons come from ExecGuard (`decision.reason`,
+    // `decision.checks[].description`) which can include parts of the LLM-
+    // submitted command. Escape every piece, then join with a literal <br>
+    // we control. Previously the raw reasons.join('<br>') let any '<' in the
+    // command render as HTML.
     const reasons = [];
-    if (data.reason) reasons.push(data.reason);
+    if (data.reason) reasons.push(escapeHtml(String(data.reason)));
     if (data.checks && data.checks.length > 0) {
       data.checks.forEach(c => {
         const desc = c.description || c.category;
-        if (desc) reasons.push(`\u2022 ${desc}`);
+        if (desc) reasons.push(`\u2022 ${escapeHtml(String(desc))}`);
       });
     }
     expEl.innerHTML = reasons.join('<br>') || 'Potentially dangerous operation';
@@ -1202,12 +1210,16 @@ function renderWorkspace() {
     const icon = PLATFORM_ICONS[ch.icon] || PLATFORM_ICONS[ch.platform] || PLATFORM_ICONS.default;
     const dotClass = ch.isActive ? 'pulsing' : 'done-dot';
     const statusClass = ch.isActive ? 'active-status' : 'done-status';
+    // SECURITY: ch.location is populated from tool args (e.g. args.url from
+    // LLM-generated browser_open calls), and ch.status / ch.platformLabel can
+    // be influenced by tool args too. Escape everything that isn't a constant
+    // class-name we computed ourselves.
     div.innerHTML = `
-      <div class="ws-icon ${ch.icon || ch.platform || 'default'}">${icon}</div>
+      <div class="ws-icon ${escapeHtml(ch.icon || ch.platform || 'default')}">${icon}</div>
       <div class="ws-body">
-        <div class="ws-platform">${ch.platformLabel}</div>
-        <div class="ws-location" title="${ch.location || ''}">${ch.location || '\u2014'}</div>
-        <div class="ws-status ${statusClass}">${ch.status}</div>
+        <div class="ws-platform">${escapeHtml(ch.platformLabel || '')}</div>
+        <div class="ws-location" title="${escapeHtml(ch.location || '')}">${escapeHtml(ch.location || '\u2014')}</div>
+        <div class="ws-status ${statusClass}">${escapeHtml(ch.status || '')}</div>
       </div>
       <div class="ws-activity-dot ${dotClass}"></div>
     `;
@@ -1221,12 +1233,12 @@ function renderPermissions(data) {
   data.tools.forEach(t => {
     const div = document.createElement('div');
     div.className = `perm-item ${t.enabled ? 'allowed' : 'denied'}`;
-    div.innerHTML = `<span>${t.enabled ? '\u2713' : '\u2717'}</span><strong>${t.name}</strong><span style="font-size:0.65rem;color:var(--text-dim);margin-left:4px">${t.platformLabel}</span>`;
+    div.innerHTML = `<span>${t.enabled ? '\u2713' : '\u2717'}</span><strong>${escapeHtml(t.name || '')}</strong><span style="font-size:0.65rem;color:var(--text-dim);margin-left:4px">${escapeHtml(t.platformLabel || '')}</span>`;
     permGrid.appendChild(div);
   });
   const info = document.createElement('div');
   info.className = 'perm-principal';
-  info.innerHTML = `Principal: <strong>${data.principal.id}</strong> | Model: ${data.provider.model} | Max steps: ${data.limits.maxSteps}`;
+  info.innerHTML = `Principal: <strong>${escapeHtml(String(data.principal.id))}</strong> | Model: ${escapeHtml(String(data.provider.model))} | Max steps: ${escapeHtml(String(data.limits.maxSteps))}`;
   permGrid.appendChild(info);
 }
 

@@ -9,7 +9,16 @@ import { ExecGuard, type ExecGuardOptions } from '../security/exec-guard.js';
 
 /**
  * Convert a skill definition into an AccessPolicy.
- * The guard function is created from ExecGuard with the skill's restrictions.
+ *
+ * The returned policy bundles ALL skill restrictions:
+ *   - `allowedTools` / `deniedTools` are mirrored on the policy itself (ToolRegistry uses these).
+ *   - `safeBinsOnly`, `allowedCommands`, `deniedCommands`, `requireApprovalFor` live INSIDE the
+ *     guard closure (an ExecGuard instance) — they are enforced at every tool execution.
+ *   - `skillName` is set on the policy as a marker.
+ *
+ * If you build an AccessPolicy by hand (without this function), the command-level and
+ * approval-level restrictions are NOT enforced. Always go through this function when a
+ * SkillDefinition exists.
  */
 export function skillToAccessPolicy(
   skill: SkillDefinition,
@@ -24,6 +33,7 @@ export function skillToAccessPolicy(
     allowedTools: skill.allowedTools,
     deniedTools: skill.deniedTools,
     guard: execGuard.createToolGuard(),
+    skillName: skill.name,
   };
 
   return { policy, guard: execGuard };

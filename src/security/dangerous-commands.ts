@@ -523,14 +523,82 @@ const DANGEROUS_PATTERNS: DangerousPattern[] = [
 // ============================================================================
 
 /**
+ * Normalize a command for matching against dangerous patterns.
+ *
+ * Without normalization, many bypasses are trivial:
+ *   - `RM -RF /`           — case differs from `rm`
+ *   - `\rm -rf /`          — leading backslash defeats shell alias resolution AND defeats our regex
+ *   - `'rm' -rf /`         — quoted command name
+ *   - `command rm -rf /`   — bypass via the `command` builtin
+ *   - `рм -rf /`           — Cyrillic homoglyphs (looks like ASCII)
+ *
+ * This function:
+ *   1. Strips leading whitespace
+ *   2. Applies Unicode NFKC normalization (catches compat ligatures)
+ *   3. Lowercases ASCII (DANGEROUS_PATTERNS use lowercase forms)
+ *   4. Strips leading obfuscation wrappers: \, ', ", `command`, `exec`, `eval`
+ *
+ * Note: Cyrillic/Greek homoglyphs survive NFKC. They are caught by the separate
+ * `hasNonAsciiCommandName` check in the caller.
+ */
+function normalizeForMatch(command: string): string {
+  let s = command.trim().normalize('NFKC').toLowerCase();
+  // Strip leading shell-builtin wrappers used to defeat aliases / our matcher
+  // (loop because they can chain: `command exec rm -rf /`).
+  for (let i = 0; i < 4; i++) {
+    const before = s;
+    s = s.replace(/^[\\'"`]+/, '');
+    s = s.replace(/^(?:command|exec|eval|builtin)\s+/, '');
+    if (s === before) break;
+  }
+  // Within the FIRST token only, strip all single/double quotes and backticks.
+  // Catches `'rm' -rf /`, `"rm" -rf /`, `r'm' -rf /` (bash quote-concatenation).
+  // We don't touch later tokens — paths like `'/etc/foo bar'` legitimately use quotes.
+  const firstSpace = s.search(/\s/);
+  if (firstSpace === -1) {
+    s = s.replace(/['"`]/g, '');
+  } else {
+    s = s.slice(0, firstSpace).replace(/['"`]/g, '') + s.slice(firstSpace);
+  }
+  return s;
+}
+
+/**
+ * Detect a command whose first token contains non-ASCII chars — likely a homoglyph
+ * attack (e.g. Cyrillic `рм` rendering as Latin `rm`). Legitimate shell commands
+ * have ASCII-only names on Windows, macOS, and Linux.
+ */
+function hasNonAsciiCommandName(command: string): boolean {
+  const firstToken = command.trim().split(/\s+/)[0] ?? '';
+  // Strip the obfuscation wrappers used in normalizeForMatch before checking
+  const stripped = firstToken.replace(/^[\\'"`]+/, '');
+  return /[^\x00-\x7F]/.test(stripped);
+}
+
+/**
  * Check a single command segment against all dangerous patterns.
  * Returns all matching results (a command can match multiple categories).
  */
 export function checkCommand(command: string, platform: Platform): CommandCheckResult[] {
   const results: CommandCheckResult[] = [];
-  const normalizedCmd = command.trim();
+  const trimmed = command.trim();
 
-  if (!normalizedCmd) return results;
+  if (!trimmed) return results;
+
+  // SECURITY: non-ASCII in the command name is almost always a homoglyph bypass
+  // attempt (no real shell binary is named in Cyrillic / Greek / Han). Block it.
+  if (hasNonAsciiCommandName(trimmed)) {
+    results.push({
+      severity: 'BLOCK',
+      category: 'HOMOGLYPH_BYPASS',
+      pattern: 'non-ascii-command-name',
+      explanation: 'Command name contains non-ASCII characters — likely a homoglyph attack attempting to bypass security checks',
+      command: trimmed,
+    });
+    return results;
+  }
+
+  const normalizedCmd = normalizeForMatch(trimmed);
 
   for (const dp of DANGEROUS_PATTERNS) {
     // Filter by platform
@@ -545,7 +613,7 @@ export function checkCommand(command: string, platform: Platform): CommandCheckR
         category: dp.category,
         pattern: dp.pattern.source,
         explanation: dp.explanation,
-        command: normalizedCmd,
+        command: trimmed,
       });
     }
   }

@@ -203,15 +203,23 @@ export async function runAgentLoop(
 
     const definitions = tools.getDefinitions();
 
-    // Track prompt tokens
+    // Pre-flight token estimate for the prompt — used only as a fallback when
+    // the LLM provider does not return `usage` (mocks, some local servers).
     const promptText = messages.map((m) => m.content).join('\n');
-    tokenTracker?.addFromText(promptText);
 
     const response: LLMActionResponse = await llm.chat(messages, definitions);
 
-    // Track response tokens
+    // Always assemble the response text — needed by the output-leak check below.
     const responseText = (response.thought ?? '') + (response.finalAnswer ?? '');
-    tokenTracker?.addFromText(responseText);
+
+    // Prefer provider-reported usage when available (it's the real billing number).
+    // Fall back to the char-based estimate only if the adapter didn't return usage.
+    if (response.usage && tokenTracker) {
+      tokenTracker.add(response.usage.totalTokens);
+    } else if (tokenTracker) {
+      tokenTracker.addFromText(promptText);
+      tokenTracker.addFromText(responseText);
+    }
 
     // --- Output Leak Check: detect if LLM leaked canary word or system prompt ---
     if (inputSanitizer && responseText) {
@@ -254,8 +262,10 @@ export async function runAgentLoop(
         toolCalls: [toolCall],
       });
 
-      // Cache check
-      const cached = toolCache?.get(response.action.tool, response.action.arguments);
+      // Cache check — scoped per principal so users do not see each other's results.
+      // Only read-only tools are cached (see DEFAULT_CACHEABLE_TOOLS in tool-cache.ts).
+      const cachePrincipalId = accessContext?.principal.id;
+      const cached = toolCache?.get(response.action.tool, response.action.arguments, cachePrincipalId);
       if (cached) {
         emit({ type: 'tool_result', step, tool: response.action.tool, result: cached.result, content: 'Cached result' });
         memory.appendToolResult(toolCallId, cached.result);
@@ -298,8 +308,9 @@ export async function runAgentLoop(
         continue;
       }
 
-      // Cache store
-      toolCache?.set(response.action.tool, response.action.arguments, result);
+      // Cache store — same principal scope as the lookup above.
+      // No-op for tools not on the cacheable whitelist.
+      toolCache?.set(response.action.tool, response.action.arguments, result, cachePrincipalId);
 
       const preview = String(typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 200);
       audit?.toolResult(accessContext, response.action.tool, { resultPreview: preview });

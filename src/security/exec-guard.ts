@@ -30,6 +30,12 @@ export interface ExecGuardOptions {
   platform?: Platform;
   onApprovalNeeded?: ApprovalCallback;
   approvalManager?: ApprovalManager;
+  /**
+   * Opaque tag (typically the current session token or principal id) used to
+   * bind every approval this guard creates to the originating session. Only
+   * a respond() call carrying the same tag can resolve the approval.
+   */
+  approvalOwnerTag?: string;
 }
 
 export class ExecGuard {
@@ -37,12 +43,14 @@ export class ExecGuard {
   private platform: Platform;
   private onApprovalNeeded: ApprovalCallback | undefined;
   private approvalManager: ApprovalManager;
+  private approvalOwnerTag: string | undefined;
 
   constructor(options: ExecGuardOptions = {}) {
     this.skill = options.skill;
     this.platform = options.platform ?? detectPlatform();
     this.onApprovalNeeded = options.onApprovalNeeded;
     this.approvalManager = options.approvalManager ?? new ApprovalManager();
+    this.approvalOwnerTag = options.approvalOwnerTag;
   }
 
   /**
@@ -220,11 +228,14 @@ export class ExecGuard {
       }
 
       if (decision.action === 'WARN' && decision.requiresApproval) {
-        // Request user approval via the approval manager
+        // Request user approval via the approval manager. Pass the owner tag
+        // so only the originating session can respond to this approval.
         const { promise, approval } = this.approvalManager.requestApproval(
           decision,
           toolName,
-          args
+          args,
+          undefined,
+          this.approvalOwnerTag
         );
 
         // Notify the UI

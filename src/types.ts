@@ -32,8 +32,24 @@ export interface AccessPolicy {
   allowedTools?: string[];
   /** Denied tool names. */
   deniedTools?: string[];
-  /** Optional check before each invocation (e.g. based on args). */
+  /**
+   * Optional check before each invocation (e.g. based on args).
+   *
+   * IMPORTANT: when a policy is built via `skillToAccessPolicy()`, the guard
+   * embeds ExecGuard with the skill's `safeBinsOnly` / `allowedCommands` /
+   * `deniedCommands` / `requireApprovalFor`. Those fields are NOT mirrored in
+   * `allowedTools` / `deniedTools` — they live entirely inside the guard. If
+   * you build an AccessPolicy by hand (without going through
+   * `skillToAccessPolicy`), those skill-level restrictions are NOT enforced.
+   * Build policies via `skillToAccessPolicy` whenever a skill exists.
+   */
   guard?: ToolGuard;
+  /**
+   * Informational marker: skill name behind this policy, if any.
+   * Set automatically by `skillToAccessPolicy()`. Useful for audit logs and
+   * for callers to verify a policy came from a skill (not hand-rolled).
+   */
+  skillName?: string;
 }
 
 export interface ToolDefinition {
@@ -71,13 +87,38 @@ export interface AgentGoal {
   accessContext?: AccessContext;
 }
 
+export interface LLMTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface LLMActionResponse {
   thought?: string;
+  /**
+   * Single next tool call (legacy / single-call mode).
+   * If the model returns parallel tool_calls, this is the FIRST one,
+   * and `actions` contains all of them.
+   */
   action?: {
     tool: string;
     arguments: Record<string, unknown>;
+    /** Provider-assigned id for this tool call, when available. */
+    id?: string;
   };
+  /**
+   * All tool calls the model emitted in this turn. Populated when the model
+   * returns parallel tool calls (OpenAI/Anthropic both support this). Consumers
+   * that haven't been updated for parallel calls should fall back to `action`.
+   */
+  actions?: Array<{
+    tool: string;
+    arguments: Record<string, unknown>;
+    id?: string;
+  }>;
   finalAnswer?: string;
+  /** Provider-reported token usage for this turn, if returned. */
+  usage?: LLMTokenUsage;
 }
 
 export interface AgentRunState {

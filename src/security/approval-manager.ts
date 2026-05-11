@@ -4,6 +4,7 @@
  * it creates an approval request and waits for user decision.
  */
 
+import { randomUUID } from 'crypto';
 import type { ExecDecision } from './exec-guard.js';
 
 export interface PendingApproval {
@@ -13,6 +14,13 @@ export interface PendingApproval {
   args: Record<string, unknown>;
   createdAt: number;
   expiresAt: number;
+  /**
+   * Optional owner tag — when set, only requests carrying the same tag are
+   * allowed to respond. Used to bind an approval to a specific session so
+   * a different session (with a valid session token) can't approve a command
+   * that wasn't theirs.
+   */
+  ownerTag?: string;
 }
 
 export class ApprovalManager {
@@ -31,14 +39,21 @@ export class ApprovalManager {
   /**
    * Create an approval request and wait for user response.
    * Returns a promise that resolves to true (approved) or false (denied/timeout).
+   *
+   * Pass `ownerTag` to bind the approval to a specific principal/session.
+   * Subsequent `respond()` calls must pass the same tag to succeed.
    */
   requestApproval(
     decision: ExecDecision,
     toolName: string,
     args: Record<string, unknown>,
-    timeoutMs?: number
+    timeoutMs?: number,
+    ownerTag?: string
   ): { promise: Promise<boolean>; approval: PendingApproval } {
-    const id = `approval_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    // SECURITY: previously used Date.now() + Math.random().slice(2,7) — only ~5
+    // chars of base36 randomness, brute-forceable. randomUUID() gives 122 bits of
+    // CSPRNG entropy via Node's crypto module — unguessable by external callers.
+    const id = `approval_${randomUUID()}`;
     const now = Date.now();
     const ttl = timeoutMs ?? this.defaultTimeoutMs;
 
@@ -49,6 +64,7 @@ export class ApprovalManager {
       args,
       createdAt: now,
       expiresAt: now + ttl,
+      ownerTag,
     };
 
     const promise = new Promise<boolean>((resolve) => {
@@ -66,11 +82,19 @@ export class ApprovalManager {
 
   /**
    * Respond to a pending approval request.
-   * Returns false if the approval was not found (expired or already answered).
+   * Returns false if the approval was not found (expired or already answered)
+   * or if the ownerTag doesn't match.
    */
-  respond(approvalId: string, approved: boolean): boolean {
+  respond(approvalId: string, approved: boolean, ownerTag?: string): boolean {
     const entry = this.pending.get(approvalId);
     if (!entry) return false;
+
+    // SECURITY: enforce session ownership when the approval was created with
+    // an ownerTag. Approvals without an ownerTag accept any caller (back-compat
+    // for direct library use without the web server in front of it).
+    if (entry.approval.ownerTag !== undefined && entry.approval.ownerTag !== ownerTag) {
+      return false;
+    }
 
     clearTimeout(entry.timeout);
     this.pending.delete(approvalId);

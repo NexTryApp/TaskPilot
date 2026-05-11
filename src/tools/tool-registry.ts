@@ -75,7 +75,15 @@ export class ToolRegistry {
     this.checkAccess(context, name);
 
     const guard = this.policy?.guard;
-    if (guard && context) {
+    if (guard) {
+      // SECURITY: if a guard is configured, it MUST run. Previously guard was
+      // silently skipped when context was undefined — fail-open if a caller
+      // forgot to pass AccessContext. Now we fail-closed: no context → denied.
+      if (!context) {
+        throw new AccessDeniedError(
+          `Guard requires AccessContext but none was provided for tool: ${name}`
+        );
+      }
       const result = await Promise.resolve(guard(context, name, args));
       if (result === false) throw new AccessDeniedError(`Guard denied: ${name}`);
     }

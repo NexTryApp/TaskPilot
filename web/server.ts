@@ -69,7 +69,7 @@ async function closeBrowser(): Promise<void> {
   _browser = null;
 }
 
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 
 const app = express();
 const PORT = 4242;
@@ -100,10 +100,23 @@ function getSessionToken(): string {
   return sessionToken;
 }
 
+/**
+ * Constant-time string equality for security-sensitive comparisons (session tokens, secrets).
+ * `===` on strings is fast but can leak the matching prefix length through timing.
+ */
+function safeStringEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false;
+  }
+}
+
 /** Middleware: require session token for sensitive endpoints */
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
   const token = String(req.headers['x-session-token'] || '');
-  if (token === getSessionToken()) { next(); return; }
+  if (safeStringEqual(token, getSessionToken())) { next(); return; }
   res.status(401).json({ error: 'Unauthorized — missing or invalid session token' });
 }
 
@@ -277,10 +290,21 @@ const rateLimitMap = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 10; // max 10 runs per minute per IP
 
+// SECURITY: only trust X-Forwarded-For if we know a reverse proxy is in front
+// of us. Otherwise anyone can spoof the IP and bypass rate limits (just keep
+// sending different values in the header). Set TASKPILOT_TRUST_PROXY=1 in env
+// when running behind nginx/Caddy/Cloudflare.
+const TRUST_PROXY = process.env['TASKPILOT_TRUST_PROXY'] === '1';
+if (TRUST_PROXY) {
+  // Express native trust proxy flag — affects req.ip / req.ips parsing as well.
+  app.set('trust proxy', true);
+}
+
 function getClientIP(req: express.Request): string {
-  // Trust X-Forwarded-For only behind a reverse proxy
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  if (TRUST_PROXY) {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  }
   return req.socket.remoteAddress || 'unknown';
 }
 
@@ -856,9 +880,15 @@ function createDemoTools(enabledTools: string[], channelConfig?: Record<string, 
           try {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), TIMEOUT_MS + 5_000);
+            // SECURITY: authenticate to the sandbox via shared secret. Same env
+            // var must be set on both services (see docker-compose.yml).
+            const sandboxSecret = process.env['SANDBOX_SECRET'] || '';
             const resp = await fetch(`${sandboxUrl}/exec`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(sandboxSecret ? { 'X-Sandbox-Token': sandboxSecret } : {}),
+              },
               body: JSON.stringify({
                 command: cmd,
                 timeout: TIMEOUT_MS,
@@ -1215,7 +1245,11 @@ app.get('/api/skills', (_req, res) => {
 app.post('/api/approval/:id', requireAuth, (req, res) => {
   const { id } = req.params;
   const { approved } = req.body;
-  const found = globalApprovalManager.respond(id, approved === true);
+  // SECURITY: tag the response with the current session token. The approval
+  // was tagged with the same value when it was created (see /api/run path),
+  // so a different session can't approve a command that wasn't theirs even
+  // if they somehow learned its ID.
+  const found = globalApprovalManager.respond(id, approved === true, getSessionToken());
 
   // Log security event
   repo.addSecurityEvent(
@@ -1340,14 +1374,18 @@ app.post('/api/test-key', requireAuth, async (req, res) => {
 });
 
 // --- History ---
-app.get('/api/history', (req, res) => {
+// SECURITY: history/security/stats endpoints expose every run (goal text, tool args,
+// security events). Previously these were unauthenticated — anyone with localhost
+// access could read every past run, including goals that may contain pasted secrets.
+// Require the same session token as /api/run.
+app.get('/api/history', requireAuth, (req, res) => {
   const limit = Math.min(Number(req.query['limit']) || 50, 200);
   const offset = Number(req.query['offset']) || 0;
   const runs = repo.getRuns(limit, offset);
   res.json(runs);
 });
 
-app.get('/api/history/:runId', (req, res) => {
+app.get('/api/history/:runId', requireAuth, (req, res) => {
   const run = repo.getRun(req.params['runId']);
   if (!run) return res.status(404).json({ error: 'Run not found' });
   const steps = repo.getSteps(req.params['runId']);
@@ -1355,14 +1393,14 @@ app.get('/api/history/:runId', (req, res) => {
 });
 
 // --- Security events ---
-app.get('/api/security-events', (req, res) => {
+app.get('/api/security-events', requireAuth, (req, res) => {
   const limit = Math.min(Number(req.query['limit']) || 100, 500);
   const events = repo.getSecurityEvents(limit);
   res.json(events);
 });
 
 // --- Stats ---
-app.get('/api/stats', (_req, res) => {
+app.get('/api/stats', requireAuth, (_req, res) => {
   res.json(repo.getStats());
 });
 
@@ -1439,8 +1477,12 @@ app.post('/api/run', requireAuth, async (req, res) => {
   registerMcpTools(toolRegistry);
 
   // --- Security: Create ExecGuard with selected skill ---
+  // Pass the current session token as owner tag so the approval flow only
+  // accepts a /api/approval response from the same session that started this
+  // run. Other tabs/sessions with valid session tokens cannot approve this.
   const { policy } = skillToAccessPolicy(selectedSkill, {
     approvalManager: globalApprovalManager,
+    approvalOwnerTag: getSessionToken(),
     onApprovalNeeded: (approval) => {
       // Send approval request to the UI via SSE
       sendSSE('approval_needed', {
@@ -1694,8 +1736,16 @@ app.post('/api/run', requireAuth, async (req, res) => {
             });
           },
         },
-        // Tools whose results come from untrusted external sources
-        untrustedTools: ['telegram_read', 'browser_open', 'browser_search'],
+        // Tools whose results come from untrusted external sources.
+        // All MCP tools are added dynamically (mcp_<server>_<tool>) — their
+        // output comes from third-party MCP servers that TaskPilot did not write,
+        // so it must pass through InputSanitizer too.
+        untrustedTools: [
+          'telegram_read',
+          'browser_open',
+          'browser_search',
+          ...toolRegistry.getAll().map(t => t.name).filter(n => n.startsWith('mcp_')),
+        ],
         // System prompt fragments to monitor for leakage
         systemPromptFragments: [
           'Security Skill:',
@@ -2511,11 +2561,23 @@ function registerMcpTools(registry: ToolRegistry): void {
     client.listTools().then(tools => {
       for (const tool of tools) {
         const fullName = `mcp_${serverName}_${tool.name}`;
+        // SECURITY: MCP descriptions come from a third-party server and end up
+        // in the LLM's prompt as part of the tool catalog. A malicious MCP can
+        // inject "ignore previous instructions"-style payloads, override system
+        // prompt directives, or smuggle in long blocks of attacker text.
+        // Sanitize: strip newlines, drop control characters, cap length, and
+        // refuse anything beyond a sensible size.
+        const rawDesc = typeof tool.description === 'string' ? tool.description : '';
+        const safeDesc = rawDesc
+          .replace(/[\r\n -]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 500);
         registry.register({
           name: fullName,
           definition: {
             name: fullName,
-            description: `[MCP: ${serverName}] ${tool.description}`,
+            description: `[MCP: ${serverName}] ${safeDesc}`,
             parameters: tool.inputSchema as Record<string, { type: string; description?: string }>,
           },
           async execute(args) {
@@ -2579,9 +2641,15 @@ app.get('/api/mcp/tools', requireAuth, async (_req, res) => {
 import http from 'http';
 
 const server = http.createServer(app);
-server.listen(PORT, () => {
+// SECURITY: bind to 127.0.0.1 by default — TaskPilot is localhost-only.
+// To expose on LAN, set TASKPILOT_BIND=0.0.0.0 explicitly (NOT recommended without auth/TLS).
+const BIND_ADDR = process.env['TASKPILOT_BIND'] || '127.0.0.1';
+server.listen(PORT, BIND_ADDR, () => {
   console.log(`\n  TaskPilot Web UI`);
-  console.log(`  http://localhost:${PORT}`);
+  console.log(`  http://${BIND_ADDR === '0.0.0.0' ? 'localhost' : BIND_ADDR}:${PORT}`);
+  if (BIND_ADDR === '0.0.0.0') {
+    console.log(`  WARNING: bound to 0.0.0.0 — accessible from LAN. Ensure firewall and auth.`);
+  }
   console.log(`  Skills: ${Array.from(allSkills.keys()).join(', ')}`);
   console.log(`  Database: ${dbPath}`);
 

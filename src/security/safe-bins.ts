@@ -57,26 +57,52 @@ const SAFE_GIT_SUBCOMMANDS = new Set([
 /**
  * Check if a command uses only safe binaries.
  * Returns true if the command is safe to execute without approval.
+ *
+ * SECURITY: input is normalized (NFKC + lowercase + strip obfuscation wrappers)
+ * so bypasses like `\python -c "..."`, `'python' -c ...`, `command python -c ...`
+ * or `РYТНОN` (Cyrillic) cannot slip through.
  */
 export function isSafeBinCommand(command: string): boolean {
-  const trimmed = command.trim();
+  let trimmed = command.trim();
+  if (!trimmed) return false;
+
+  // Reject homoglyph attacks at this layer too — the safe-bin path is a
+  // primary fast-allow lane, so it MUST not let non-ASCII command names pass.
+  const firstRaw = trimmed.split(/\s+/)[0] ?? '';
+  if (/[^\x00-\x7F]/.test(firstRaw.replace(/^[\\'"`]+/, ''))) return false;
+
+  // Normalize: NFKC + lowercase + strip leading wrappers (\, quotes, command/exec/eval/builtin)
+  trimmed = trimmed.normalize('NFKC').toLowerCase();
+  for (let i = 0; i < 4; i++) {
+    const before = trimmed;
+    trimmed = trimmed.replace(/^[\\'"`]+/, '');
+    trimmed = trimmed.replace(/^(?:command|exec|eval|builtin)\s+/, '');
+    if (trimmed === before) break;
+  }
   if (!trimmed) return false;
 
   // Extract the first token (executable)
   const tokens = trimmed.split(/\s+/);
-  const executable = tokens[0].toLowerCase();
+  const executable = tokens[0];
 
   // Special handling for git
   if (executable === 'git') {
-    const subcommand = tokens[1]?.toLowerCase();
+    const subcommand = tokens[1];
     if (!subcommand) return true; // just "git" = safe (shows help)
     return SAFE_GIT_SUBCOMMANDS.has(subcommand);
   }
 
   // Special handling for node/python — only --version/--help is safe
-  // SECURITY: bare `node`/`python3` opens an interactive REPL that allows arbitrary code execution
+  // SECURITY: bare `node`/`python3` opens an interactive REPL that allows arbitrary code execution.
+  // We also catch `python3 -c"..."` (no space) via a regex on the raw arg-string below.
   if (['node', 'python', 'python3', 'ruby', 'go', 'tsc', 'npx', 'pnpm', 'yarn', 'bun'].includes(executable)) {
-    const arg = tokens[1]?.toLowerCase();
+    const argStr = trimmed.slice(executable.length); // includes leading space (or NOT, if attacker fused -c)
+    // Reject any -c / -e / -m / --command / --eval / --exec form, with or without leading space.
+    //   ok:   `python --version`, `node -v`
+    //   bad:  `python3 -c "..."`, `python3 -c"..."`, `node-e "..."`, `node --eval "..."`
+    if (/(?:^|\s|-)-[cemCEM](?=\b|["'])/.test(argStr) || /\s-(?:c|e|m)\b/.test(argStr)) return false;
+    if (/--(?:command|eval|exec)\b/.test(argStr)) return false;
+    const arg = tokens[1];
     if (!arg) return false; // bare binary = REPL / interactive prompt — NOT safe
     if (arg === '--version' || arg === '-v' || arg === '--help' || arg === '-h') return true;
     return false; // running scripts or packages is not safe
