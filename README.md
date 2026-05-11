@@ -478,6 +478,70 @@ TaskPilot is built on the OpenClaw foundation but adds enterprise-grade security
 
 ---
 
+## Bugs & Fixes (audit May 2026)
+
+A multi-agent security and code audit was run in May 2026 and the issues below
+were addressed. **Read this before upgrading or deploying** — some changes
+affect default behavior (bind address, cache scope, model defaults).
+
+### Critical fixes (behavior-changing)
+
+| # | Area | What was wrong | What changed |
+|---|---|---|---|
+| C4 | `src/llm/openai-adapter.ts` | Default model was `'gpt-5.2'` (does not exist) — every run without an explicit `model` failed. | Default → `'gpt-4o-mini'`. Set `model` explicitly in `OpenAIAdapterOptions` for production. |
+| C7 | `web/server.ts` | Server called `listen(PORT)` with no bind — Node defaulted to `0.0.0.0`, exposing the UI on the LAN. | Now binds to `127.0.0.1` by default. Override with `TASKPILOT_BIND=0.0.0.0` env var **only** behind firewall + auth. |
+| C8 | `docker-compose.yml` | Port mapping `"4242:4242"` was bound to `0.0.0.0`. | Now `"127.0.0.1:4242:4242"`. Change explicitly for LAN exposure. |
+| C2 | `src/tools/tool-cache.ts` | Cache key was `toolName + args` — one principal's cached results could leak to another. | Key now includes principal id (`scope::tool::args`). Pass `principalId` when getting/setting. |
+| C3 | `src/tools/tool-cache.ts` | All tools were cacheable, including mutating ones (`send_email`, `telegram_send`) — re-invocation skipped the side effect. | Only read-only tools are cached (`DEFAULT_CACHEABLE_TOOLS`). Mutating calls are never cached. |
+| C9 | `src/security/approval-manager.ts` | Approval IDs were `approval_${Date.now()}_${Math.random().slice(2,7)}` — ~5 chars of base36 entropy, brute-forceable. | IDs now use `crypto.randomUUID()` (122-bit CSPRNG). |
+| C10 | `src/tools/tool-registry.ts` | `policy.guard` was silently skipped when `AccessContext` was missing — fail-open if a caller forgot to pass context. | Now fail-closed: guard configured + no context → `AccessDeniedError`. |
+
+### High-severity fixes (security)
+
+| # | Area | What was wrong | What changed |
+|---|---|---|---|
+| H1 | `src/security/dangerous-commands.ts` | Patterns were case-sensitive without `/i`, so `RM -RF /` slipped through; `\rm`, `'rm'`, `command rm`, `eval rm` defeated regex; Cyrillic homoglyphs (`рм`) passed unchecked. | `checkCommand` now NFKC-normalizes + lowercases + strips leading obfuscation wrappers; non-ASCII command names are blocked as homoglyph attacks. |
+| H2 | `src/security/safe-bins.ts` | `python3 -c"..."` (no space), `node-e ...`, and `--eval`/`--exec` forms passed as safe — bare `python3`/`node` already covered, but compact forms were not. | `isSafeBinCommand` rejects `-c`/`-e`/`-m`/`--command`/`--eval`/`--exec` in any whitespace form, and applies the same normalization as H1. |
+| H3 | `src/security/blocked-paths.ts` | `~/.ssh` was expanded only to `/users/.ssh` — but real paths are `/Users/<name>/.ssh`. Also `$HOME/.ssh`, `${HOME}/.ssh`, `%USERPROFILE%\.ssh` were not recognized. | Sensitive home leaves (`.ssh`, `.aws`, `.gnupg`, `.kube`, etc.) are matched as path components anywhere — catches every home-expansion form. |
+| H4 | `src/llm/openai-adapter.ts` | No retry on 429/5xx/network errors → one rate-limit failure killed the run; no timeout; tool_calls beyond the first were dropped; provider error envelope `{error:{message}}` not parsed; no temperature/top_p/max_tokens config; `usage` ignored. | Added 3-attempt exponential backoff with jitter for 429/408/5xx/network; 60s `AbortController` timeout; provider error JSON parsed; `temperature`/`topP`/`maxTokens`/`timeoutMs`/`maxRetries` are now options; parallel `tool_calls` collected into `actions` (first one in `action` for back-compat); real `usage.{prompt,completion,total}_tokens` returned and used by `TokenTracker` when present. |
+| H5 | `src/agent-loop.ts` | Token budget used a char-based estimate (~10–20% off real billing) even when the provider reported real `usage`. | Real `usage.totalTokens` is now preferred; char estimate is the fallback for adapters that don't return usage (mocks, some local servers). |
+
+### Architectural notes
+
+- `AccessPolicy` now carries an informational `skillName` marker (set by
+  `skillToAccessPolicy`). When you build a policy by hand (without going
+  through `skillToAccessPolicy`), the skill-level command restrictions
+  (`safeBinsOnly`, `allowedCommands`, `deniedCommands`, `requireApprovalFor`)
+  are NOT enforced — they live inside the guard closure. Build policies via
+  `skillToAccessPolicy` whenever a SkillDefinition exists.
+
+### Known limitations (not yet fixed)
+
+- **Anthropic prompt caching / extended thinking**: the `OpenAIAdapter` uses
+  the OpenAI-compat shim at `https://api.anthropic.com/v1`. This works for
+  basic chat + tool calls but loses Anthropic-native features (~90% cost
+  savings from prompt caching, extended thinking). A native `AnthropicAdapter`
+  is on the roadmap.
+- **Parallel tool_calls in the agent loop**: the OpenAI adapter now collects
+  all parallel tool calls into `response.actions`, but the agent loop still
+  processes only the first one (via `response.action`). Multi-action turns
+  fall back to sequential execution.
+- **Token estimator without `usage`**: when an adapter doesn't return usage
+  (mock, some local servers), the char-based estimate is approximate.
+  Use a real tokenizer (`tiktoken`) for production billing.
+- **Windows file permissions**: `data/.encryption-key` is written with
+  `{ mode: 0o600 }` — that's a no-op on NTFS. Protect the key file via
+  Windows ACLs if running on Windows.
+- **Custom YAML parser**: `skill-loader.ts` does not parse multi-line YAML
+  values (`|`, `>`). Use single-line strings, or replace the parser with
+  `js-yaml` if you need richer skill definitions.
+- **`16+ LLM providers` claim**: only `OpenAIAdapter` and `MockLLMAdapter`
+  ship as concrete classes. Other providers work via OpenAI-compat by
+  passing `baseUrl` — but providers without true OpenAI-compat (Bedrock with
+  AWS signing, native Anthropic features, Vertex AI) need dedicated adapters.
+
+---
+
 ## Contributing
 
 Contributions are welcome! Feel free to open issues or pull requests.
